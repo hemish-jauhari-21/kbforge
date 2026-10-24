@@ -1,0 +1,32 @@
+{
+  "started_at": "2026-10-24T13:35:02+00:00",
+  "finished_at": "2026-10-24T13:36:07+00:00",
+  "duration_seconds": 65.35,
+  "seed_urls": [
+    "https://vims.com"
+  ],
+  "allowed_domains": [
+    "vims.com"
+  ],
+  "max_depth": 1,
+  "max_pages": 100,
+  "page_attempts": 21,
+  "pages_fetched": 21,
+  "pages_failed": 0,
+  "skipped_robots": 0,
+  "skipped_domain": 8,
+  "skipped_visited": 0,
+  "skipped_depth": 77,
+  "skipped_content_type": 0,
+  "skipped_limit": 0,
+  "failures": [],
+  "files_loaded": 1,
+  "files_failed": 0,
+  "file_failures": [],
+  "documents_written": 22,
+  "output_files": {
+    "documents": "output/manual-test/documents.jsonl",
+    "link_graph": "output/manual-test/link_graph.json",
+    "pages_dir": "output/manual-test/pages"
+  }
+}

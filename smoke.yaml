@@ -1,0 +1,18 @@
+client_name: smoke
+sources:
+  urls: ["https://example.com"]
+  allowed_domains: ["example.com"]
+  files_dir: "./client_files"
+crawl:
+  max_depth: 1
+  max_pages: 5
+  delay_seconds: 1.0
+chunking:
+  strategy: fixed
+  size: 300
+  overlap: 50
+index:
+  bm25: true
+  dense: false
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+output_dir: "./output/smoke"

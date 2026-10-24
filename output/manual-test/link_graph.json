@@ -1,0 +1,1093 @@
+{
+  "nodes": [
+    {
+      "id": "https://vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://vims.com/apps",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://vims.com/mcp",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://vims.com/blog",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/business",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://chat.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://compute.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://database.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://directory.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://drive.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://flow.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://keys.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://kb.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://meeting.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://notes.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://reach.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://schedule.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://social.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://team.vims.com/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://x.com/hellovims",
+      "external": true,
+      "fetched": false
+    },
+    {
+      "id": "https://github.com/hellovims",
+      "external": true,
+      "fetched": false
+    },
+    {
+      "id": "https://t.me/hellovims",
+      "external": true,
+      "fetched": false
+    },
+    {
+      "id": "https://linkedin.com/company/hellovims",
+      "external": true,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/legal/privacy/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://vims.com/legal/eula/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://vims.com/desktop",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/agent",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/agent-nft",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/chat",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/database",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/drive",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/team",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/meeting",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/schedule",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/knowledge-base",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/flow",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/reach",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/keys",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/compute",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/directory",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/notes",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/coder",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/skills",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/terminal",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/sdk",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/bookkeeper",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/docs",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/scripture",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/monitor",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/security",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/podcasts",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/news",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/social",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/avatar",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/search",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/prompt-studio",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/settings",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/",
+      "external": false,
+      "fetched": true
+    },
+    {
+      "id": "https://mcp.vims.com/",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/00-vims-convergence-point",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/01-local-first-vllm-ollama-swarms",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/02-runtimes-swarms-multi-runtime",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/03-security-first-hitl-sandboxing",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/04-data-knowledge-database-vector-pixel",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/05-mcp-connectors-client-server",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/06-p2p-surfaces-desktop-browser",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/07-voice-meeting-agents-whisper-piper",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/08-agent-identity-nostr-nft",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/09-agent-wallets-tba-prepaid",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/10-agent-marketplace-mint-monetize",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/11-flow-teams-automate-collaborate",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/12-build-anything-sdk-coder-terminal",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/13-app-marketplace",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/20-what-is-a-token-bound-account",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/21-how-to-run-vllm-locally",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/22-p2p-video-calls-without-an-account",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/blog/23-what-is-model-context-protocol",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/cdn-cgi/l/email-protection",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/enterprise",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/terms",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/privacy",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://intuit.com/privacy",
+      "external": true,
+      "fetched": false
+    },
+    {
+      "id": "https://plaid.com/legal/",
+      "external": true,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/legal/eula",
+      "external": false,
+      "fetched": false
+    },
+    {
+      "id": "https://intuit.com/legal",
+      "external": true,
+      "fetched": false
+    },
+    {
+      "id": "https://vims.com/legal/privacy",
+      "external": false,
+      "fetched": false
+    }
+  ],
+  "edges": [
+    {
+      "source": "https://vims.com/",
+      "target": "https://vims.com/apps",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://vims.com/mcp",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://vims.com/blog",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://vims.com/business",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://chat.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://compute.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://database.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://directory.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://drive.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://flow.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://keys.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://kb.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://meeting.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://notes.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://reach.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://schedule.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://social.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://team.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://x.com/hellovims",
+      "external_target": true
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://github.com/hellovims",
+      "external_target": true
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://t.me/hellovims",
+      "external_target": true
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://linkedin.com/company/hellovims",
+      "external_target": true
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://vims.com/legal/privacy/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/",
+      "target": "https://vims.com/legal/eula/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/apps",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/desktop",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/mcp",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/agent",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/agent-nft",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/chat",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/database",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/drive",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/team",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/meeting",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/schedule",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/knowledge-base",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/flow",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/reach",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/keys",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/compute",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/directory",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/notes",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/coder",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/skills",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/terminal",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/sdk",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/bookkeeper",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/docs",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/scripture",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/monitor",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/security",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/podcasts",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/news",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/social",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/avatar",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/search",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/prompt-studio",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/settings",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/blog/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/business",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/legal/privacy/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/apps",
+      "target": "https://vims.com/legal/eula/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/apps",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/desktop",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/mcp",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://mcp.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/agent",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/keys",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/coder",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/sdk",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/blog/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/business",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/legal/privacy/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/mcp",
+      "target": "https://vims.com/legal/eula/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog",
+      "target": "https://vims.com/blog/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/apps",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/desktop",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/mcp",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/00-vims-convergence-point",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/01-local-first-vllm-ollama-swarms",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/02-runtimes-swarms-multi-runtime",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/03-security-first-hitl-sandboxing",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/04-data-knowledge-database-vector-pixel",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/05-mcp-connectors-client-server",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/06-p2p-surfaces-desktop-browser",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/07-voice-meeting-agents-whisper-piper",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/08-agent-identity-nostr-nft",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/09-agent-wallets-tba-prepaid",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/10-agent-marketplace-mint-monetize",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/11-flow-teams-automate-collaborate",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/12-build-anything-sdk-coder-terminal",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/13-app-marketplace",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/20-what-is-a-token-bound-account",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/21-how-to-run-vllm-locally",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/22-p2p-video-calls-without-an-account",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/blog/23-what-is-model-context-protocol",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/legal/privacy/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/blog/",
+      "target": "https://vims.com/legal/eula/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/business",
+      "target": "https://vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/business",
+      "target": "https://vims.com/business",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/business",
+      "target": "https://vims.com/cdn-cgi/l/email-protection",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/business",
+      "target": "https://vims.com/enterprise",
+      "external_target": false
+    },
+    {
+      "source": "https://compute.vims.com/",
+      "target": "https://compute.vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://compute.vims.com/",
+      "target": "https://vims.com/terms",
+      "external_target": false
+    },
+    {
+      "source": "https://compute.vims.com/",
+      "target": "https://vims.com/privacy",
+      "external_target": false
+    },
+    {
+      "source": "https://database.vims.com/",
+      "target": "https://vims.com/terms",
+      "external_target": false
+    },
+    {
+      "source": "https://database.vims.com/",
+      "target": "https://vims.com/privacy",
+      "external_target": false
+    },
+    {
+      "source": "https://keys.vims.com/",
+      "target": "https://vims.com/terms",
+      "external_target": false
+    },
+    {
+      "source": "https://keys.vims.com/",
+      "target": "https://vims.com/privacy",
+      "external_target": false
+    },
+    {
+      "source": "https://meeting.vims.com/",
+      "target": "https://vims.com/terms",
+      "external_target": false
+    },
+    {
+      "source": "https://meeting.vims.com/",
+      "target": "https://vims.com/privacy",
+      "external_target": false
+    },
+    {
+      "source": "https://schedule.vims.com/",
+      "target": "https://vims.com/terms",
+      "external_target": false
+    },
+    {
+      "source": "https://schedule.vims.com/",
+      "target": "https://vims.com/privacy",
+      "external_target": false
+    },
+    {
+      "source": "https://team.vims.com/",
+      "target": "https://vims.com/terms",
+      "external_target": false
+    },
+    {
+      "source": "https://team.vims.com/",
+      "target": "https://vims.com/privacy",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/legal/privacy/",
+      "target": "https://vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/legal/privacy/",
+      "target": "https://intuit.com/privacy",
+      "external_target": true
+    },
+    {
+      "source": "https://vims.com/legal/privacy/",
+      "target": "https://plaid.com/legal/",
+      "external_target": true
+    },
+    {
+      "source": "https://vims.com/legal/privacy/",
+      "target": "https://vims.com/cdn-cgi/l/email-protection",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/legal/privacy/",
+      "target": "https://vims.com/legal/eula",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/legal/eula/",
+      "target": "https://vims.com/",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/legal/eula/",
+      "target": "https://intuit.com/legal",
+      "external_target": true
+    },
+    {
+      "source": "https://vims.com/legal/eula/",
+      "target": "https://plaid.com/legal/",
+      "external_target": true
+    },
+    {
+      "source": "https://vims.com/legal/eula/",
+      "target": "https://vims.com/legal/privacy",
+      "external_target": false
+    },
+    {
+      "source": "https://vims.com/legal/eula/",
+      "target": "https://vims.com/cdn-cgi/l/email-protection",
+      "external_target": false
+    }
+  ],
+  "stats": {
+    "nodes": 86,
+    "internal_nodes": 79,
+    "external_nodes": 7,
+    "edges": 130
+  },
+  "created_at": "2026-10-24T13:36:07+00:00"
+}
