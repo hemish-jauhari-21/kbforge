@@ -1,0 +1,10 @@
+{
+  "input_documents": 50,
+  "documents_cleaned": 50,
+  "cleaning_failures": 1,
+  "input_count": 50,
+  "exact_duplicates_removed": 0,
+  "near_duplicates_removed": 0,
+  "kept_count": 50,
+  "output_documents": 50
+}

@@ -116,3 +116,35 @@ def run_process(config: Config, documents: Iterable[Document] | None = None, inp
         "stats_path": str(stats_path),
         "stats": stats,
     }
+
+
+def run_chunk(config, documents=None, input_path=None):
+    from kbforge.documents import read_documents_jsonl, write_documents_jsonl
+    from kbforge.chunk import chunk_documents, chunk_to_dict
+    import json
+    from pathlib import Path
+
+    if documents is None and input_path is not None:
+        documents = read_documents_jsonl(input_path)
+    elif documents is None:
+        # Try cleaned first, then original
+        cleaned_path = Path(config.output_dir) / "documents_cleaned.jsonl"
+        if cleaned_path.exists():
+            documents = read_documents_jsonl(cleaned_path)
+        else:
+            documents = read_documents_jsonl(Path(config.output_dir) / "documents.jsonl")
+
+    docs_list = list(documents)
+    strategy = getattr(config.chunking, 'strategy', 'fixed')
+    size = getattr(config.chunking, 'size', 300)
+    overlap = getattr(config.chunking, 'overlap', 50)
+    chunks = chunk_documents(docs_list, strategy=strategy, size=size, overlap=overlap)
+
+    output_dir = Path(config.output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    chunks_path = output_dir / "chunks.jsonl"
+    with open(chunks_path, 'w', encoding='utf-8') as f:
+        for c in chunks:
+            f.write(json.dumps(chunk_to_dict(c), ensure_ascii=False) + '\n')
+
+    return {"chunks_written": len(chunks), "chunks_path": str(chunks_path)}

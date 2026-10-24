@@ -7,17 +7,17 @@ client_name: demo
 sources:
   # Seed URLs to start the crawl from.
   urls:
-    - "https://vims.com"
+    - "https://www.python.org/"
   # Only these domains (and their subdomains) may be crawled.
   # Leave empty to derive the domain list from the seed URLs.
   allowed_domains:
-    - "vims.com"
+    - "www.python.org"
   # Directory of uploaded client files (PDF, DOCX, HTML, TXT). Optional.
   files_dir: "./client_files"
 
 crawl:
   max_depth: 1
-  max_pages: 100
+  max_pages: 50
   delay_seconds: 1.0
   timeout_seconds: 15
   retries: 3

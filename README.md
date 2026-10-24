@@ -100,3 +100,13 @@ backoff, and enforces `crawl.max_pages`. `max_pages` counts page-fetch
 attempts, including failed responses and responses skipped by content
 type; robots.txt requests are not counted. Configure it to crawl only
 what you are allowed to crawl.
+
+
+## Phase 3: Chunking
+
+Chunking is supported with three strategies (configurable in `chunking`):
+- `fixed`: word-based chunks with configurable `size` and `overlap`
+- `sentence`: sentence-grouped chunks up to target size (words)
+- `paragraph`: paragraph/heading-aware chunking
+
+Chunks are written to `chunks.jsonl` with stable chunk IDs and metadata for traceability back to source documents.

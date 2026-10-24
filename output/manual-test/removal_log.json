@@ -1,0 +1,25 @@
+{
+  "removals": [
+    {
+      "type": "cleaning_failure",
+      "doc_id": "web-3befe5531d52",
+      "reason": "suspiciously_short_extraction",
+      "source": "https://www.python.org/success-stories/category/arts/",
+      "diagnostics": {
+        "trafilatura_attempted": true,
+        "trafilatura_succeeded": true,
+        "strategy": "semantic_main_preferred"
+      }
+    }
+  ],
+  "stats": {
+    "input_documents": 50,
+    "documents_cleaned": 50,
+    "cleaning_failures": 1,
+    "input_count": 50,
+    "exact_duplicates_removed": 0,
+    "near_duplicates_removed": 0,
+    "kept_count": 50,
+    "output_documents": 50
+  }
+}

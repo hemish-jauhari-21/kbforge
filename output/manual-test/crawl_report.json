@@ -1,29 +1,29 @@
 {
-  "started_at": "2026-10-24T13:35:02+00:00",
-  "finished_at": "2026-10-24T13:36:07+00:00",
-  "duration_seconds": 65.35,
+  "started_at": "2026-10-24T19:04:47+00:00",
+  "finished_at": "2026-10-24T19:05:52+00:00",
+  "duration_seconds": 65.151,
   "seed_urls": [
-    "https://vims.com"
+    "https://www.python.org/"
   ],
   "allowed_domains": [
-    "vims.com"
+    "www.python.org"
   ],
   "max_depth": 1,
-  "max_pages": 100,
-  "page_attempts": 21,
-  "pages_fetched": 21,
+  "max_pages": 50,
+  "page_attempts": 50,
+  "pages_fetched": 49,
   "pages_failed": 0,
   "skipped_robots": 0,
-  "skipped_domain": 8,
+  "skipped_domain": 1885,
   "skipped_visited": 0,
-  "skipped_depth": 77,
+  "skipped_depth": 5705,
   "skipped_content_type": 0,
-  "skipped_limit": 0,
+  "skipped_limit": 14,
   "failures": [],
   "files_loaded": 1,
   "files_failed": 0,
   "file_failures": [],
-  "documents_written": 22,
+  "documents_written": 50,
   "output_files": {
     "documents": "output/manual-test/documents.jsonl",
     "link_graph": "output/manual-test/link_graph.json",

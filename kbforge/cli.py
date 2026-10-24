@@ -55,10 +55,19 @@ def _cmd_build(args: argparse.Namespace) -> int:
             print("\nphase 2 skipped (disabled in config)")
     except Exception as exc:
         print(f"\nphase 2 error: {exc}", file=sys.stderr)
-        # Don't fail the build if Phase 2 fails
         return 0
 
-    print("\nlater phases (chunk, index, package) are not wired yet")
+    # Phase 3: chunking
+    try:
+        from kbforge.process import run_chunk
+        chunk_summary = run_chunk(config)
+        print("\nphase 3 complete")
+        print(f"  chunks written : {chunk_summary['chunks_written']} -> {chunk_summary['chunks_path']}")
+    except Exception as exc:
+        print(f"\nphase 3 error: {exc}", file=sys.stderr)
+        return 0
+
+    print("\nlater phases (index, package) are not wired yet")
     return 0
 
 

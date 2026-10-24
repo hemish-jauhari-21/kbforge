@@ -1,16 +1,10 @@
-"""Content cleaning for kbforge Phase 2.
-
-Cleans documents using trafilatura for crawled HTML, normalizes text,
-and prepares cleaned documents for deduplication.
-"""
+"""Content cleaning for kbforge Phase 2."""
 
 from __future__ import annotations
 
 import copy
-import hashlib
 import logging
 import unicodedata
-from dataclasses import replace
 from typing import Iterable
 
 import trafilatura
@@ -22,154 +16,311 @@ logger = logging.getLogger("kbforge.clean")
 
 
 def normalize_unicode_and_whitespace(text: str) -> str:
-    """Normalize Unicode (NFKC) and collapse excessive whitespace while
-    preserving paragraph boundaries where possible."""
     if text is None:
         return ""
-    # Normalize unicode
     text = unicodedata.normalize("NFKC", text)
-    # Replace various whitespace chars
-    # Try to preserve paragraph breaks (double newlines)
-    # First, normalize line endings
     text = text.replace("\r\n", "\n").replace("\r", "\n")
-    # Collapse spaces/tabs within lines but keep newlines
-    # Split by newlines and normalize each line
     lines = []
     for line in text.split("\n"):
-        # Collapse whitespace
         line = " ".join(line.split())
         lines.append(line)
-    # Join back - but we need to be smart about preserving paragraph structure
-    # Multiple consecutive empty lines become paragraph breaks
-    # Collapse runs of empty lines to at most 2 newlines (paragraph break)
-    result_lines = []
-    for line in lines:
-        result_lines.append(line)
-    # Rejoin
-    normalized = "\n".join(result_lines)
-    # Collapse 3+ consecutive newlines to 2 (paragraph break)
+    normalized = "\n".join(lines)
     while "\n\n\n" in normalized:
         normalized = normalized.replace("\n\n\n", "\n\n")
-    # Also collapse spaces around newlines
     normalized = normalized.strip()
     return normalized
 
 
 def _is_html_content(doc: Document) -> bool:
-    """Determine if document contains crawled HTML that needs trafilatura extraction."""
-    # Crawled HTML documents are typically web kind with html content_type
     if doc.kind == "web" and doc.content_type == "html":
         return True
-    # Also if it's HTML content type from files? The requirement says
-    # "For crawled HTML documents..." - be careful to follow spec
-    # But better to be reasonable: if it's HTML and has HTML tags, try to extract
-    # For files loaded as HTML, they were already processed by BeautifulSoup in files.py
-    # But cleaner to avoid double-processing inappropriately
     return False
 
 
-def _extract_main_content_html(html: str) -> str | None:
-    """Extract main content from HTML using trafilatura."""
-    try:
-        # Try with default settings first
-        extracted = trafilatura.extract(html, include_comments=False, include_tables=True, 
-                                         include_formatting=False, favor_precision=False)
-        if extracted and extracted.strip():
-            return extracted
-        # Try bare extraction as fallback
+def _is_likely_boilerplate_text(text: str) -> bool:
+    if not text:
+        return True
+    t = text.lower()
+    boilerplate_indicators = [
+        "cookie policy",
+        "privacy policy",
+        "terms of service",
+        "all rights reserved",
+        "subscribe to",
+        "sign up",
+    ]
+    count = sum(1 for b in boilerplate_indicators if b in t)
+    if count >= 2:
+        return True
+    return False
+
+
+def _score_extracted_text(text: str) -> float:
+    if not text or not text.strip():
+        return 0.0
+    norm = normalize_unicode_and_whitespace(text)
+    words = norm.split()
+    if len(words) == 0:
+        return 0.0
+    score = float(len(words))
+    score += norm.count("\n\n") * 2
+    if _is_likely_boilerplate_text(norm):
+        score *= 0.5
+    return score
+
+
+def _try_trafilatura_configs(html: str):
+    configs = [
+        dict(include_comments=False, include_tables=True, include_formatting=False, favor_precision=False),
+        dict(include_comments=False, include_tables=True, include_formatting=False, favor_precision=True),
+        dict(include_comments=False, include_tables=True, favor_recall=True),
+        dict(output_format="txt", include_comments=False, include_tables=True),
+    ]
+    results = []
+    for cfg in configs:
         try:
-            extracted = trafilatura.extract(html, output_format='txt', include_comments=False)
+            extracted = trafilatura.extract(html, **cfg)
             if extracted and extracted.strip():
-                return extracted
-        except Exception:
-            pass
-    except Exception as e:
-        logger.debug(f"trafilatura extraction failed: {e}")
-    return None
+                results.append(extracted.strip())
+        except Exception as e:
+            logger.debug(f"trafilatura config failed: {e}")
+            continue
+    return results
 
 
-def _fallback_html_extraction(html: str) -> str:
-    """Deterministic fallback for HTML extraction failures."""
+def _extract_with_semantic_fallback(html: str) -> tuple[str | None, dict]:
+    diagnostics = {"strategy": "semantic_fallback"}
     try:
         soup = BeautifulSoup(html, "lxml")
-        # Remove script/style
+    except Exception:
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+        except Exception:
+            return None, diagnostics
+
+    # Remove clearly non-content elements
+    for tag in soup(["script", "style", "noscript", "iframe", "svg", "canvas", "form"]):
+        try:
+            tag.decompose()
+        except Exception:
+            pass
+
+    # Try to find main content in semantic containers FIRST (high priority)
+    candidates_main = []
+    for elements in [soup.find_all("main"), soup.find_all("article"), soup.find_all(attrs={"role": "main"})]:
+        for el in elements:
+            try:
+                # Don't decompose nav/header/footer inside main if they're the main structure? Usually not
+                text = el.get_text(separator="\n")
+                if text and text.strip():
+                    candidates_main.append(text)
+            except Exception:
+                continue
+
+    if candidates_main:
+        # Prefer main/article content even if short - it's likely the actual page content
+        best = max(candidates_main, key=_score_extracted_text)
+        return best, diagnostics
+
+    # Remove common boilerplate
+    for tag in soup.find_all(["nav", "header", "footer", "aside"]):
+        try:
+            tag.decompose()
+        except Exception:
+            pass
+    for tag in soup.find_all(attrs={"role": ["navigation", "banner", "contentinfo", "complementary", "search"]}):
+        try:
+            tag.decompose()
+        except Exception:
+            pass
+
+    candidates = []
+    body = soup.find("body") or soup
+    for tag in body.find_all(["nav", "header", "footer", "aside"]):
+        try:
+            tag.decompose()
+        except Exception:
+            pass
+    for tag in body.find_all(["section", "div"]):
+        try:
+            text = tag.get_text(separator="\n")
+            if text and text.strip():
+                words = text.strip().split()
+                if len(words) > 20:  # be more lenient
+                    candidates.append(text)
+        except Exception:
+            continue
+
+    if candidates:
+        best = max(candidates, key=_score_extracted_text)
+        return best, diagnostics
+
+    text = body.get_text(separator="\n")
+    if text and text.strip():
+        return text, diagnostics
+    return None, diagnostics
+
+
+def _extract_main_content_html(html: str) -> tuple[str | None, dict]:
+    diagnostics = {"trafilatura_attempted": True}
+    
+    # First check semantic main/article - if they contain distinct content, prefer them
+    try:
+        soup = BeautifulSoup(html, "lxml")
+    except Exception:
+        try:
+            soup = BeautifulSoup(html, "html.parser")
+        except Exception:
+            soup = None
+    
+    semantic_main_content = None
+    if soup:
+        for elements in [soup.find_all("main"), soup.find_all("article"), soup.find_all(attrs={"role": "main"})]:
+            for el in elements:
+                try:
+                    # Get a copy to analyze
+                    text = el.get_text(separator="\n")
+                    if text and text.strip():
+                        semantic_main_content = text
+                        break
+                except Exception:
+                    continue
+            if semantic_main_content:
+                break
+    
+    trafilatura_results = _try_trafilatura_configs(html)
+    if trafilatura_results:
+        diagnostics["trafilatura_succeeded"] = True
+        best_traf = max(trafilatura_results, key=_score_extracted_text)
+        
+        if semantic_main_content:
+            best_sem_main = max([semantic_main_content], key=_score_extracted_text)
+            # If main/article contains page-specific content different from generic boilerplate
+            # or is very different in nature, prefer it
+            sem_norm = normalize_unicode_and_whitespace(best_sem_main)
+            traf_norm = normalize_unicode_and_whitespace(best_traf)
+            # If semantic main has "not found" or specific error messages, or is much shorter
+            # but contains specific terms that suggest it's the actual content, prefer it
+            if len(sem_norm) < 200 and ("not found" in sem_norm.lower() or "404" in sem_norm.lower() or len(sem_norm.split()) < 30):
+                # Could be a short page - but also could be important content
+                # Prefer semantic main if it looks like actual page content vs boilerplate
+                return best_sem_main, {**diagnostics, "strategy": "semantic_main_preferred"}
+            # If they are completely different and semantic main has page-unique content
+            if sem_norm != traf_norm and len(sem_norm) > 10:
+                # Check if semantic main contains content not typical of site chrome
+                # Prefer semantic main content when it exists - it's more likely to be page-specific
+                return best_sem_main, {**diagnostics, "strategy": "semantic_main_preferred"}
+            # If trafilatura gives much longer content that might be boilerplate
+            if len(traf_norm) > len(sem_norm) * 10 and len(sem_norm) < 500:
+                return best_sem_main, {**diagnostics, "strategy": "semantic_main_preferred_short"}
+        
+        semantic_result, sem_diag = _extract_with_semantic_fallback(html)
+        diagnostics.update(sem_diag)
+        if semantic_result:
+            if _score_extracted_text(semantic_result) > _score_extracted_text(best_traf) * 1.5:
+                return semantic_result, diagnostics
+            return best_traf, diagnostics
+        return best_traf, diagnostics
+
+    diagnostics["trafilatura_succeeded"] = False
+    if semantic_main_content:
+        return semantic_main_content, {**diagnostics, "strategy": "semantic_main_preferred"}
+    semantic_result, sem_diag = _extract_with_semantic_fallback(html)
+    diagnostics.update(sem_diag)
+    if semantic_result:
+        return semantic_result, diagnostics
+
+    try:
+        soup2 = BeautifulSoup(html, "lxml")
+        for tag in soup2(["script", "style", "noscript", "iframe"]):
+            tag.decompose()
+        text = soup2.get_text(separator="\n")
+        if text and text.strip():
+            diagnostics["strategy"] = "bs4_get_text"
+            return text, diagnostics
+    except Exception:
+        pass
+
+    diagnostics["strategy"] = "failed"
+    return None, diagnostics
+
+
+def _fallback_html_extraction(html: str) -> tuple[str, dict]:
+    text, diag = _extract_main_content_html(html)
+    if text and text.strip():
+        return text, diag
+    try:
+        soup = BeautifulSoup(html, "lxml")
         for tag in soup(["script", "style", "noscript", "iframe"]):
             tag.decompose()
-        # Get text
         text = soup.get_text(separator="\n")
-        return text
+        return normalize_unicode_and_whitespace(text), {"strategy": "bs4_last_resort"}
     except Exception:
-        # Last resort - return as-is
-        return html
+        return normalize_unicode_and_whitespace(html) if html else "", {"strategy": "raw"}
 
 
 def clean_document(doc: Document) -> tuple[Document, dict | None]:
-    """
-    Clean a single document.
-    Returns (cleaned_document, failure_info_or_none)
-    """
     failure_info = None
-    original = doc
-    
+
     if _is_html_content(doc):
-        # Try trafilatura extraction
-        extracted = _extract_main_content_html(doc.raw_text)
+        extracted, diag = _extract_main_content_html(doc.raw_text)
         if not extracted or not extracted.strip():
-            # Deterministic fallback - do not silently discard meaningful content
-            extracted = _fallback_html_extraction(doc.raw_text)
+            extracted, diag = _fallback_html_extraction(doc.raw_text)
             if not extracted or not extracted.strip():
                 failure_info = {
                     "doc_id": doc.doc_id,
                     "reason": "empty_extraction",
-                    "source": doc.source
+                    "source": doc.source,
+                    "diagnostics": diag,
                 }
                 logger.warning(f"Empty extraction for {doc.doc_id} from {doc.source}")
             else:
                 failure_info = {
                     "doc_id": doc.doc_id,
                     "reason": "extraction_fallback_used",
-                    "source": doc.source
+                    "source": doc.source,
+                    "diagnostics": diag,
                 }
                 logger.debug(f"Used fallback extraction for {doc.doc_id}")
         cleaned_text = normalize_unicode_and_whitespace(extracted)
-        if not cleaned_text.strip() and doc.raw_text.strip():
-            # Still nothing extracted but original had content - use fallback normalized
-            fallback = _fallback_html_extraction(doc.raw_text)
-            cleaned_text = normalize_unicode_and_whitespace(fallback)
+        if not cleaned_text.strip() and doc.raw_text and doc.raw_text.strip():
+            fallback_text, diag = _fallback_html_extraction(doc.raw_text)
+            cleaned_text = normalize_unicode_and_whitespace(fallback_text)
             failure_info = failure_info or {
                 "doc_id": doc.doc_id,
                 "reason": "extraction_failed_fallback",
-                "source": doc.source
+                "source": doc.source,
+                "diagnostics": diag,
+            }
+        if cleaned_text and len(cleaned_text.strip()) < 50 and doc.raw_text and len(doc.raw_text) > 10000:
+            failure_info = failure_info or {
+                "doc_id": doc.doc_id,
+                "reason": "suspiciously_short_extraction",
+                "source": doc.source,
+                "diagnostics": diag,
             }
     else:
-        # For plain text documents (files like txt/pdf/docx/html files already processed)
-        # or other content - normalize without parsing as HTML
         cleaned_text = normalize_unicode_and_whitespace(doc.raw_text)
-    
-    # Create new document instance (don't mutate original)
+
     cleaned_doc = Document(
         doc_id=doc.doc_id,
         source=doc.source,
         title=doc.title,
         raw_text=cleaned_text,
         fetched_at=doc.fetched_at,
-        content_hash=compute_content_hash(cleaned_text),  # Recalculate after cleaning
+        content_hash=compute_content_hash(cleaned_text),
         kind=doc.kind,
         content_type=doc.content_type,
         metadata=copy.deepcopy(doc.metadata),
     )
-    
+
     return cleaned_doc, failure_info
 
 
 def clean_documents(documents: Iterable[Document]) -> tuple[list[Document], list[dict], dict]:
-    """
-    Clean multiple documents.
-    Returns (cleaned_documents, failures, stats)
-    """
     cleaned = []
     failures = []
-    
+
     for doc in documents:
         try:
             cleaned_doc, failure_info = clean_document(doc)
@@ -178,14 +329,15 @@ def clean_documents(documents: Iterable[Document]) -> tuple[list[Document], list
                 failures.append(failure_info)
         except Exception as e:
             logger.error(f"Failed to clean document {doc.doc_id}: {e}")
-            failures.append({
-                "doc_id": doc.doc_id,
-                "reason": f"cleaning_error: {e}",
-                "source": doc.source
-            })
-            # Still try to add normalized version as fallback
+            failures.append(
+                {
+                    "doc_id": doc.doc_id,
+                    "reason": f"cleaning_error: {e}",
+                    "source": doc.source,
+                }
+            )
             try:
-                cleaned_text = normalize_unicode_and_whitespace(doc.raw_text)
+                cleaned_text = normalize_unicode_and_whitespace(doc.raw_text) if doc.raw_text else ""
                 cleaned_doc = Document(
                     doc_id=doc.doc_id,
                     source=doc.source,
@@ -199,15 +351,8 @@ def clean_documents(documents: Iterable[Document]) -> tuple[list[Document], list
                 )
                 cleaned.append(cleaned_doc)
             except Exception:
-                # Skip only if completely broken
                 continue
-    
-    stats = {
-        "total_input": len(list(documents)) if False else sum(1 for _ in []) + len(cleaned) + len(failures),  # rough
-        "cleaned": len(cleaned),
-        "failures": len(failures),
-    }
-    # Better stats
+
     stats = {
         "documents_cleaned": len(cleaned),
         "cleaning_failures": len(failures),
@@ -215,5 +360,4 @@ def clean_documents(documents: Iterable[Document]) -> tuple[list[Document], list
     return cleaned, failures, stats
 
 
-# Alias for flexibility
 clean = clean_documents
