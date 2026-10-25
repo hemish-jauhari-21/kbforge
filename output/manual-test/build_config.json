@@ -1,0 +1,41 @@
+{
+  "available": true,
+  "chunking": {
+    "overlap": 50,
+    "size": 300,
+    "strategy": "fixed"
+  },
+  "cleaning": {
+    "enabled": true
+  },
+  "client_name": "demo",
+  "crawl": {
+    "delay_seconds": 1.0,
+    "max_depth": 1,
+    "max_pages": 50,
+    "retries": 3,
+    "timeout_seconds": 15.0
+  },
+  "deduplication": {
+    "enabled": true,
+    "exact": true,
+    "near_duplicate": true,
+    "num_perm": 128,
+    "shingle_size": 3,
+    "similarity_threshold": 0.8
+  },
+  "format": "kbforge-build-config",
+  "format_version": "1.0",
+  "index": {
+    "bm25": true,
+    "dense": true,
+    "embedding_model": "sentence-transformers/all-MiniLM-L6-v2"
+  },
+  "sources": {
+    "allowed_domains": [
+      "www.python.org"
+    ],
+    "files_dir_configured": true,
+    "url_count": 1
+  }
+}

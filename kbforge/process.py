@@ -148,3 +148,26 @@ def run_chunk(config, documents=None, input_path=None):
             f.write(json.dumps(chunk_to_dict(c), ensure_ascii=False) + '\n')
 
     return {"chunks_written": len(chunks), "chunks_path": str(chunks_path)}
+
+
+def run_index(config, chunks=None, chunks_path=None):
+    from kbforge.index import InvertedIndex
+    from pathlib import Path
+    import json
+
+    if chunks is None:
+        if chunks_path is None:
+            chunks_path = Path(config.output_dir) / "chunks.jsonl"
+        chunks = []
+        if Path(chunks_path).exists():
+            with open(chunks_path, 'r', encoding='utf-8') as f:
+                for line in f:
+                    line = line.strip()
+                    if line:
+                        chunks.append(json.loads(line))
+    
+    index = InvertedIndex()
+    index.build(chunks)
+    index_dir = Path(config.output_dir) / "index"
+    index.save(index_dir)
+    return {"chunks_indexed": index.N, "index_dir": str(index_dir)}

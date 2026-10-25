@@ -1,0 +1,28 @@
+{
+  "chunks": 195,
+  "documents_cleaned": 50,
+  "documents_raw": 50,
+  "format": "kbforge-build-stats",
+  "format_version": "1.0",
+  "index": {
+    "average_document_length": 281.91282051282053,
+    "chunks_indexed": 195
+  },
+  "ingestion": {
+    "documents_written": 50,
+    "files_failed": 0,
+    "files_loaded": 1,
+    "pages_failed": 0,
+    "pages_fetched": 49
+  },
+  "processing": {
+    "cleaning_failures": 1,
+    "documents_cleaned": 50,
+    "exact_duplicates_removed": 0,
+    "input_count": 50,
+    "input_documents": 50,
+    "kept_count": 50,
+    "near_duplicates_removed": 0,
+    "output_documents": 50
+  }
+}
