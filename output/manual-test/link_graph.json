@@ -25326,12 +25326,12 @@
       "fetched": false
     },
     {
-      "id": "https://www.python.org/events/python-events/2250/",
+      "id": "https://www.python.org/events/python-events/2201/",
       "external": false,
       "fetched": false
     },
     {
-      "id": "https://www.python.org/events/python-events/2201/",
+      "id": "https://www.python.org/events/python-events/2250/",
       "external": false,
       "fetched": false
     },
@@ -25481,12 +25481,12 @@
       "fetched": false
     },
     {
-      "id": "https://www.python.org/events/python-events/2169/",
+      "id": "https://www.python.org/events/python-events/2211/",
       "external": false,
       "fetched": false
     },
     {
-      "id": "https://www.python.org/events/python-events/2211/",
+      "id": "https://www.python.org/events/python-events/2169/",
       "external": false,
       "fetched": false
     },
@@ -73214,12 +73214,12 @@
     },
     {
       "source": "https://www.python.org/events/",
-      "target": "https://www.python.org/events/python-events/2250/",
+      "target": "https://www.python.org/events/python-events/2201/",
       "external_target": false
     },
     {
       "source": "https://www.python.org/events/",
-      "target": "https://www.python.org/events/python-events/2201/",
+      "target": "https://www.python.org/events/python-events/2250/",
       "external_target": false
     },
     {
@@ -74599,12 +74599,12 @@
     },
     {
       "source": "https://www.python.org/events/python-events/past/",
-      "target": "https://www.python.org/events/python-events/2169/",
+      "target": "https://www.python.org/events/python-events/2211/",
       "external_target": false
     },
     {
       "source": "https://www.python.org/events/python-events/past/",
-      "target": "https://www.python.org/events/python-events/2211/",
+      "target": "https://www.python.org/events/python-events/2169/",
       "external_target": false
     },
     {
@@ -75519,7 +75519,7 @@
     },
     {
       "source": "https://www.python.org/shell/",
-      "target": "https://www.python.org/success-stories/a-startup-healthcare-tech-firm-is-now-poised-for-the-future/",
+      "target": "https://www.python.org/success-stories/building-a-dependency-graph-of-our-python-codebase/",
       "external_target": false
     },
     {
@@ -76769,5 +76769,5 @@
     "external_nodes": 629,
     "edges": 10214
   },
-  "created_at": "2026-10-24T19:29:23+00:00"
+  "created_at": "2026-10-25T16:00:10+00:00"
 }

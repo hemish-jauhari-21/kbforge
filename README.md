@@ -29,14 +29,16 @@ kbforge build --config my-client.yaml       # ingest, clean, chunk, index, packa
 kbforge query "inverted index" --config my-client.yaml --mode bm25 --k 5
 kbforge package --config my-client.yaml     # refresh package metadata only
 kbforge serve --package ./output/demo       # local FastAPI search API
+kbforge evaluate --package ./output/demo \
+  --queries evaluation/synthetic_document_judgments.json --k 5 --output report.json
 ```
 
 Phase 1 implements ingestion (crawler + file loaders). Phase 2 adds
 content cleaning (trafilatura-based extraction for HTML, normalization)
 and deduplication (exact hash-based and near-duplicate detection via
 word shingles + MinHash/LSH). Phase 3 adds chunking, Phase 4 the
-inverted index with BM25/TF-IDF ranking, and Phase 5 packaging, saved-index
-querying and the local search API.
+inverted index with BM25/TF-IDF ranking, Phase 5 packaging, saved-index
+querying and the local search API, and Phase 6 offline retrieval evaluation.
 
 ## Configuration
 
@@ -175,3 +177,83 @@ kbforge query "tf idf" --package ./output/demo/index --mode tfidf
 Invalid modes, non-positive `--k`, empty queries, missing packages and
 corrupt artifacts produce a non-zero exit with a clear message. A valid
 query with no matches prints `no results` and exits successfully.
+
+## Phase 6: Retrieval evaluation
+
+`kbforge evaluate` compares the existing BM25 and TF-IDF rankers against
+offline relevance judgments. It loads an existing package, output directory
+or bare index directory and never crawls, cleans, chunks or rebuilds.
+
+```bash
+# Evaluate both rankers with document-level judgments
+kbforge evaluate \
+  --package ./output/manual-test \
+  --queries evaluation/synthetic_document_judgments.json \
+  --k 5 --unit document --mode both --output report.json
+
+# Evaluate one ranker against a chunk-level JSONL dataset
+kbforge evaluate --package ./output/demo --queries judgments.jsonl \
+  --k 10 --mode bm25
+```
+
+The bundled `evaluation/synthetic_document_judgments.json` targets the
+`output/manual-test` package. Its labels are **synthetic examples**, not
+authoritative relevance assessments; replace them with documented human
+judgments for a real experiment.
+
+### Judgment format
+
+JSON datasets can declare metadata and a `queries` list:
+
+```json
+{
+  "format": "kbforge-evaluation",
+  "format_version": "1.0",
+  "name": "example judgments",
+  "description": "Optional provenance note",
+  "synthetic": true,
+  "unit": "document",
+  "queries": [
+    {"query_id": "q1", "query": "download python", "relevant": ["doc-1", "doc-2"]}
+  ]
+}
+```
+
+JSONL files contain one query object per non-empty line:
+
+```json
+{"query_id": "q1", "query": "download python", "relevant": ["doc-1"]}
+{"query_id": "q2", "query": "search api", "relevant": []}
+```
+
+`query_id`/`id`, `query`/`text`, and `relevant`/`relevant_ids` are accepted
+aliases. IDs are deduplicated. JSONL defaults to `unit: "chunk"`; JSON can
+set `unit` to `chunk` or `document`. A disagreement between the dataset and
+`--unit`, duplicate query IDs, malformed judgments, and IDs absent from the
+loaded index are reported as errors.
+
+### Metrics
+
+Judgments are binary (relevant or not). Duplicate retrieved IDs are ignored
+after their first occurrence. Empty result lists and queries without relevant
+IDs score `0.0` rather than NaN.
+
+- **P@k** = relevant results in the top `k` / `k`
+- **R@k** = relevant results in the top `k` / total judged relevant
+- **RR** = `1 / rank` of the first relevant result
+- **MRR** = mean RR over queries
+- **nDCG@k** = DCG@k / ideal DCG@k, using `gain / log2(rank + 1)`
+- **AP** = mean of precision at each relevant hit, divided by judged relevant
+- **MAP** = mean AP over queries
+
+P@k, R@k and nDCG use cutoff `k`; AP/MAP and MRR use the full ranking. For
+document-level evaluation, ranked chunks are collapsed to unique document IDs,
+keeping the first occurrence. This avoids rewarding a document multiple times
+for returning many chunks.
+
+The JSON report contains format/version metadata, dataset provenance,
+configuration, aggregate metrics per mode, per-query metrics and top-`k`
+retrieved IDs, plus a `bm25_minus_tfidf` comparison when both modes run.
+Comparing different chunking/cleaning configurations requires separate
+packages built with the same document IDs; automatic multi-package comparison
+is intentionally deferred beyond Phase 6.

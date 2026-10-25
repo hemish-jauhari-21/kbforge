@@ -168,6 +168,87 @@ def _cmd_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def _cmd_evaluate(args: argparse.Namespace) -> int:
+    from kbforge.evaluation import (
+        EvaluationError,
+        evaluate,
+        load_dataset,
+        write_report,
+    )
+    from kbforge.package import KnowledgeBase, SUPPORTED_RANKING_MODES
+
+    if args.k <= 0:
+        print("--k must be greater than 0", file=sys.stderr)
+        return 2
+
+    try:
+        dataset = load_dataset(args.queries, requested_unit=args.unit)
+    except EvaluationError as exc:
+        print(f"evaluation dataset error: {exc}", file=sys.stderr)
+        return 2
+
+    if args.package:
+        source = Path(args.package)
+    else:
+        try:
+            config = load_config(args.config)
+        except ConfigError as exc:
+            print(f"config error: {exc}", file=sys.stderr)
+            return 2
+        source = Path(config.output_dir)
+
+    try:
+        kb = KnowledgeBase.load(source)
+    except Exception as exc:
+        print(f"error loading knowledge base: {exc}", file=sys.stderr)
+        if not args.package:
+            print("run 'kbforge build' first", file=sys.stderr)
+        return 1
+
+    modes = list(SUPPORTED_RANKING_MODES) if args.mode == "both" else [args.mode]
+    try:
+        report = evaluate(kb, dataset, k=args.k, modes=modes)
+    except EvaluationError as exc:
+        print(f"evaluation error: {exc}", file=sys.stderr)
+        return 1
+
+    print(
+        f"evaluation: {dataset.name} | queries: {len(dataset.queries)} | "
+        f"unit: {dataset.unit} | k: {args.k}"
+    )
+    if dataset.synthetic is not None:
+        print(f"synthetic judgments: {'yes' if dataset.synthetic else 'no'}")
+    for mode in report["configuration"]["modes"]:
+        metrics = report["aggregate"][mode]
+        print(
+            f"{mode:>5}: P@{args.k}={metrics['precision_at_k']:.4f} "
+            f"R@{args.k}={metrics['recall_at_k']:.4f} "
+            f"MRR={metrics['mrr']:.4f} "
+            f"nDCG@{args.k}={metrics['ndcg_at_k']:.4f} "
+            f"MAP={metrics['map']:.4f}"
+        )
+
+    comparison = report.get("comparison", {}).get("bm25_minus_tfidf")
+    if comparison:
+        print(
+            "bm25 - tfidf: "
+            f"P@{args.k}={comparison['precision_at_k']:+.4f} "
+            f"R@{args.k}={comparison['recall_at_k']:+.4f} "
+            f"MRR={comparison['mrr']:+.4f} "
+            f"nDCG@{args.k}={comparison['ndcg_at_k']:+.4f} "
+            f"MAP={comparison['map']:+.4f}"
+        )
+
+    if args.output:
+        try:
+            report_path = write_report(report, args.output)
+        except OSError as exc:
+            print(f"could not write report: {exc}", file=sys.stderr)
+            return 1
+        print(f"report: {report_path}")
+    return 0
+
+
 def _cmd_serve(args: argparse.Namespace) -> int:
     try:
         import uvicorn
@@ -252,8 +333,45 @@ def build_parser() -> argparse.ArgumentParser:
     p_serve.add_argument("--port", type=int, default=8000, help="bind port (default: 8000)")
     p_serve.set_defaults(func=_cmd_serve)
 
-    p_eval = sub.add_parser("evaluate", help="evaluate retrieval quality (Phase 6)")
-    p_eval.set_defaults(func=lambda args: _cmd_not_implemented("evaluate"))
+    p_eval = sub.add_parser(
+        "evaluate",
+        help="evaluate BM25/TF-IDF retrieval against relevance judgments",
+        description=(
+            "Load an existing package/index and a JSON or JSONL judgment "
+            "dataset, then compute IR metrics without crawling or rebuilding."
+        ),
+    )
+    p_eval.add_argument(
+        "--package",
+        help="package/output directory or index directory (no rebuild)",
+    )
+    p_eval.add_argument("--config", default="config.yaml", help="client config YAML")
+    p_eval.add_argument(
+        "--queries", required=True, help="JSON or JSONL relevance-judgment dataset"
+    )
+    p_eval.add_argument(
+        "--k",
+        type=int,
+        default=5,
+        help="metric cutoff for P@k, R@k and nDCG@k (default: 5)",
+    )
+    p_eval.add_argument(
+        "--unit",
+        choices=["chunk", "document"],
+        default=None,
+        help="evaluation unit (default: dataset unit, else chunk)",
+    )
+    p_eval.add_argument(
+        "--mode",
+        choices=["bm25", "tfidf", "both"],
+        default="both",
+        help="ranking mode to evaluate (default: both)",
+    )
+    p_eval.add_argument(
+        "--output",
+        help="write the complete per-query report to this JSON file",
+    )
+    p_eval.set_defaults(func=_cmd_evaluate)
 
     p_update = sub.add_parser("update", help="incremental re-crawl (Phase 7)")
     p_update.add_argument("--config", default="config.yaml")

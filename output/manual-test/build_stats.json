@@ -5,7 +5,7 @@
   "format": "kbforge-build-stats",
   "format_version": "1.0",
   "index": {
-    "average_document_length": 281.91282051282053,
+    "average_document_length": 282.2102564102564,
     "chunks_indexed": 195
   },
   "ingestion": {
