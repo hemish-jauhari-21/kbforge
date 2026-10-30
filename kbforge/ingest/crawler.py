@@ -1,24 +1,3 @@
-"""Polite breadth-first web crawler.
-
-Architecture:
-- A queue holds ``(url, depth)`` pairs; seeds start at depth 0.
-- Before every page fetch the crawler asks robots.txt (cached per host)
-  whether the User-agent is allowed to fetch that path.
-- The HTTP layer is injected as a ``Fetcher`` callable, so tests can run
-  the full crawl logic against canned responses with no network access.
-  The default fetcher is requests-based with retry + exponential backoff.
-- Every hyperlink found on a fetched page becomes an edge in the link
-  graph; links to other domains are recorded but never followed.
-- Politeness: a configurable delay between page fetches, one persistent
-  session, a descriptive User-agent.
-
-Outputs (written by :func:`kbforge.ingest.crawler.run_ingest`):
-- ``pages/<doc_id>.html``      raw HTML of every fetched page
-- ``link_graph.json``          nodes + directed edges for PageRank
-- ``crawl_report.json``        counts, failures, timings
-- ``documents.jsonl``          merged web + file documents (Phase 1 schema)
-"""
-
 from __future__ import annotations
 
 import hashlib
@@ -235,7 +214,11 @@ class Crawler:
             if normalized is None or normalized in seen_on_page:
                 continue
             seen_on_page.add(normalized)
-            external = not host_matches(normalized, self.allowed_domains)
+            external = not host_matches(
+                normalized,
+                self.allowed_domains,
+                include_subdomains=self.crawl_cfg.include_subdomains,
+            )
             if external:
                 self.stats["skipped_domain"] += 1
             self.graph.add_node(normalized, external=external)
@@ -257,7 +240,11 @@ class Crawler:
             if normalized is None:
                 logger.warning("skipping invalid seed URL: %s", seed)
                 continue
-            if not host_matches(normalized, self.allowed_domains):
+            if not host_matches(
+                normalized,
+                self.allowed_domains,
+                include_subdomains=self.crawl_cfg.include_subdomains,
+            ):
                 self.stats["skipped_domain"] += 1
                 logger.warning("seed URL outside allowed domains, skipping: %s", normalized)
                 continue
@@ -311,7 +298,11 @@ class Crawler:
                 logger.warning("failed to accept %s: %s", page.url, reason)
                 continue
             if final_url != page.url:
-                if not host_matches(final_url, self.allowed_domains):
+                if not host_matches(
+                    final_url,
+                    self.allowed_domains,
+                    include_subdomains=self.crawl_cfg.include_subdomains,
+                ):
                     self.stats["skipped_domain"] += 1
                     self.graph.add_node(final_url, external=True)
                     self.graph.add_edge(page.url, final_url, True)

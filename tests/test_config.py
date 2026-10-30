@@ -95,6 +95,13 @@ output_dir: "./out"
     assert config.crawl.max_pages == 300
     assert config.chunking.strategy == "fixed"
     assert config.index.bm25 is True
+    assert config.index.dense is False
+
+
+def test_dense_index_is_rejected_as_unsupported(tmp_path):
+    path = write_config(tmp_path, VALID.replace("dense: false", "dense: true"))
+    with pytest.raises(ConfigError, match="index.dense.*not supported"):
+        load_config(path)
 
 
 @pytest.mark.parametrize(
@@ -121,6 +128,7 @@ output_dir: "./out"
         ("overlap: 20", "overlap: true", "chunking.overlap"),
         ("overlap: 20", "overlap: -1", "chunking.overlap"),
         ("bm25: true", "bm25: 'yes'", "index.bm25"),
+        ("dense: false", "dense: 'no'", "index.dense"),
         ('embedding_model: "sentence-transformers/all-MiniLM-L6-v2"', "embedding_model: 123", "index.embedding_model"),
         ('output_dir: "./out"', "output_dir: 123", "output_dir"),
         ('client_name: demo', "client_name: 123", "client_name"),

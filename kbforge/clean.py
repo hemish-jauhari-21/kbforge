@@ -1,5 +1,3 @@
-"""Content cleaning for kbforge Phase 2."""
-
 from __future__ import annotations
 
 import copy
@@ -318,24 +316,25 @@ def clean_document(doc: Document) -> tuple[Document, dict | None]:
 
 
 def clean_documents(documents: Iterable[Document]) -> tuple[list[Document], list[dict], dict]:
+    """Clean documents and classify cleaning diagnostics.
+
+    Documents are retained when cleaning succeeds or when a fallback produces
+    usable text. A diagnostic with ``outcome="retained"`` is therefore a
+    warning about a document that remains in the corpus. Only an unrecoverable
+    cleaning error produces ``outcome="excluded"``.
+    """
     cleaned = []
-    failures = []
+    warnings = []
+    exclusions = []
 
     for doc in documents:
         try:
             cleaned_doc, failure_info = clean_document(doc)
             cleaned.append(cleaned_doc)
             if failure_info:
-                failures.append(failure_info)
+                warnings.append({**failure_info, "outcome": "retained"})
         except Exception as e:
             logger.error(f"Failed to clean document {doc.doc_id}: {e}")
-            failures.append(
-                {
-                    "doc_id": doc.doc_id,
-                    "reason": f"cleaning_error: {e}",
-                    "source": doc.source,
-                }
-            )
             try:
                 cleaned_text = normalize_unicode_and_whitespace(doc.raw_text) if doc.raw_text else ""
                 cleaned_doc = Document(
@@ -350,14 +349,30 @@ def clean_documents(documents: Iterable[Document]) -> tuple[list[Document], list
                     metadata=copy.deepcopy(doc.metadata),
                 )
                 cleaned.append(cleaned_doc)
+                warnings.append(
+                    {
+                        "doc_id": doc.doc_id,
+                        "reason": f"cleaning_error: {e}",
+                        "source": doc.source,
+                        "outcome": "retained",
+                    }
+                )
             except Exception:
-                continue
+                exclusions.append(
+                    {
+                        "doc_id": doc.doc_id,
+                        "reason": f"cleaning_error: {e}",
+                        "source": doc.source,
+                        "outcome": "excluded",
+                    }
+                )
 
     stats = {
         "documents_cleaned": len(cleaned),
-        "cleaning_failures": len(failures),
+        "cleaning_warnings": len(warnings),
+        "documents_excluded_by_cleaning": len(exclusions),
     }
-    return cleaned, failures, stats
+    return cleaned, warnings + exclusions, stats
 
 
 clean = clean_documents

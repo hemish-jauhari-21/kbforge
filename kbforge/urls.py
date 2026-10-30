@@ -1,18 +1,3 @@
-"""URL normalization used by the crawler.
-
-Normalization is what makes crawl dedup work: the same page reachable as
-``HTTP://Example.com/a?utm_source=x#frag`` and ``http://example.com/a``
-must collapse to one canonical string. Rules:
-
-- lowercase scheme and host
-- strip ``www.`` prefix? No: ``www.example.com`` may be a different host,
-  so the host is kept as-is (minus default ports)
-- drop the fragment, drop non-http(s) schemes (mailto:, javascript:, ...)
-- drop common tracking query parameters (utm_*, fbclid, gclid, ...),
-  URL-decode, re-encode and sort the remaining parameters
-- empty path becomes ``/``
-"""
-
 from __future__ import annotations
 
 from urllib.parse import parse_qsl, urlencode, urljoin, urlsplit, urlunsplit
@@ -83,13 +68,25 @@ def normalize_url(href: str, base: str | None = None) -> str | None:
     return urlunsplit((scheme, host, path, query, ""))
 
 
-def host_matches(url: str, allowed_domains: list[str]) -> bool:
-    """True when ``url``'s host is in ``allowed_domains`` or a subdomain of one."""
+def host_matches(
+    url: str,
+    allowed_domains: list[str],
+    *,
+    include_subdomains: bool = True,
+) -> bool:
+    """True when ``url``'s host is allowed.
+
+    Subdomains are accepted by default, preserving the original crawler
+    behavior. Passing ``include_subdomains=False`` restricts the match to the
+    exact configured host names.
+    """
     if not allowed_domains:
         return True
     host = (urlsplit(url).hostname or "").lower()
     for domain in allowed_domains:
         domain = domain.lower()
-        if host == domain or host.endswith("." + domain):
+        if host == domain:
+            return True
+        if include_subdomains and host.endswith("." + domain):
             return True
     return False

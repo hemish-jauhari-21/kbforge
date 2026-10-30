@@ -19,7 +19,7 @@ def test_punctuation_handling():
 def test_unicode_handling():
     proc = TextProcessor()
     tokens = proc.tokenize("café naïve")
-    assert any("caf" in t or "naiv" in t for t in tokens)
+    assert tokens == ["café", "naïve"]
 
 
 def test_stopwords_optional():

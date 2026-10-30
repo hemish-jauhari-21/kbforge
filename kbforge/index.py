@@ -1,5 +1,3 @@
-"""Inverted index and lexical retrieval from scratch."""
-
 from __future__ import annotations
 
 import json
@@ -164,6 +162,22 @@ class TFIDF:
             # IDF = log(N/df)
             self.idf[term] = math.log(self.N / df) if df > 0 else 0.0
 
+        squared_norms = defaultdict(float)
+        for term, posting in index.postings.items():
+            idf = self.idf.get(term, 0.0)
+            for chunk_id, tf in posting.items():
+                weight = (1.0 + math.log(tf)) * idf
+                squared_norms[chunk_id] += weight ** 2
+
+        self.doc_norms = {}
+        for chunk_id in index.chunk_info:
+            if index.doc_lengths.get(chunk_id, 0) > 0:
+                self.doc_norms[chunk_id] = math.sqrt(
+                    squared_norms.get(chunk_id, 0.0)
+                )
+            else:
+                self.doc_norms[chunk_id] = 1.0
+
     def score(self, query: str) -> list[SearchResult]:
         if not query or not query.strip():
             return []
@@ -182,34 +196,26 @@ class TFIDF:
         if query_norm == 0:
             return []
 
-        scores = {}
-        # For each term in query, look up postings
+        candidate_ids = set()
         for term in query_vec:
-            if term not in self.index.postings:
-                continue
-            for chunk_id, tf in self.index.postings[term].items():
-                if chunk_id not in scores:
-                    # Compute doc vector component on-the-fly contribution
-                    scores[chunk_id] = 0.0
-        # Compute cosine similarity
+            candidate_ids.update(self.index.postings.get(term, {}))
+
+        # Compute cosine similarity for chunks containing a query term.
         result_scores = {}
-        for chunk_id in self.index.chunk_info:
-            # Compute dot product
+        for chunk_id in candidate_ids:
+            if chunk_id not in self.doc_norms:
+                continue
             dot = 0.0
-            doc_len = self.index.doc_lengths.get(chunk_id, 0)
             for term, qv in query_vec.items():
-                if term in self.index.postings and chunk_id in self.index.postings[term]:
-                    tf = self.index.postings[term][chunk_id]
-                    # TF-IDF with log normalization
-                    tfidf_doc = (1.0 + math.log(tf)) * self.idf.get(term, 0.0)
-                    dot += tfidf_doc * qv
+                posting = self.index.postings.get(term)
+                if posting is None or chunk_id not in posting:
+                    continue
+                tf = posting[chunk_id]
+                # TF-IDF with log normalization
+                tfidf_doc = (1.0 + math.log(tf)) * self.idf.get(term, 0.0)
+                dot += tfidf_doc * qv
             if dot > 0:
-                # Compute doc norm (approximate from stored info)
-                doc_norm = math.sqrt(sum(
-                    ((1.0 + math.log(self.index.postings[t][chunk_id])) * self.idf.get(t, 0.0)) ** 2
-                    for t in self.index.postings
-                    if chunk_id in self.index.postings[t]
-                )) if doc_len > 0 else 1.0
+                doc_norm = self.doc_norms[chunk_id]
                 if doc_norm > 0:
                     result_scores[chunk_id] = dot / (query_norm * doc_norm)
 

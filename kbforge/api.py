@@ -1,15 +1,3 @@
-"""FastAPI search API for a packaged kbforge knowledge base (Phase 5).
-
-The application only *loads* an existing package/index.  It never crawls,
-cleans, chunks, or rebuilds anything.
-
-Run locally::
-
-    kbforge serve --package output/demo
-    # or
-    KBFORGE_PACKAGE=output/demo uvicorn kbforge.api:app --host 127.0.0.1 --port 8000
-"""
-
 from __future__ import annotations
 
 import logging

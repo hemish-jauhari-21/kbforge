@@ -1,18 +1,3 @@
-"""Shared document schema used by every ingestion source.
-
-Every document that enters the pipeline (crawled page or uploaded file)
-is represented as a :class:`Document`. Later phases (clean, chunk, index)
-consume the JSONL serialization of these objects.
-
-Design notes:
-- ``raw_text`` holds the raw HTML for crawled pages and the extracted
-  plain text for files. Phase 2 extracts main content from HTML.
-- ``content_hash`` is the SHA-256 of ``raw_text`` encoded as UTF-8.
-  It is used for exact-duplicate detection.
-- ``doc_id`` is a short stable identifier derived from the source URL or
-  path, so re-builds produce the same ids.
-"""
-
 from __future__ import annotations
 
 import hashlib

@@ -6,12 +6,15 @@ import json
 
 import pytest
 
+from kbforge.index import TFIDF
 from kbforge.package import (
     BUILD_CONFIG_FILENAME,
+    BUILD_MARKER_FILENAME,
     BUILD_STATS_FILENAME,
     MANIFEST_FILENAME,
     PACKAGE_FORMAT,
     PACKAGE_FORMAT_VERSION,
+    IncompleteBuildError,
     IncompatiblePackageError,
     KnowledgeBase,
     MissingArtifactError,
@@ -23,6 +26,18 @@ from kbforge.package import (
 
 def _read(path):
     return path.read_text(encoding="utf-8")
+
+
+def _write_json(path, data):
+    path.write_text(json.dumps(data), encoding="utf-8")
+
+
+def _chunk_lines(output_dir):
+    return [
+        line
+        for line in (output_dir / "chunks.jsonl").read_text(encoding="utf-8").splitlines()
+        if line.strip()
+    ]
 
 
 def test_build_package_creates_manifest_and_stats(sample_kb):
@@ -130,6 +145,19 @@ def test_results_are_deterministic(sample_kb):
     ]
 
 
+def test_package_tfidf_search_matches_direct_ranker(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+    kb = load_package(output_dir)
+
+    direct = TFIDF(kb.index).score("search index")
+    loaded = kb.search("search index", mode="tfidf", limit=kb.index.N)
+
+    assert [(r.chunk_id, r.score, r.rank) for r in loaded] == [
+        (r.chunk_id, r.score, r.rank) for r in direct
+    ]
+
+
 def test_missing_artifact_is_reported(sample_kb):
     config, output_dir = sample_kb
     build_package(config)
@@ -198,3 +226,145 @@ def test_package_refuses_to_overwrite_unrelated_metadata(sample_kb):
         build_package(config)
 
     assert json.loads(user_manifest.read_text(encoding="utf-8")) == {"custom": "keep me"}
+
+
+def test_load_rejects_chunk_line_without_id(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    lines = _chunk_lines(output_dir)
+    record = json.loads(lines[0])
+    record.pop("chunk_id", None)
+    record.pop("id", None)
+    lines[0] = json.dumps(record)
+    (output_dir / "chunks.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    with pytest.raises(PackageError, match="no chunk_id"):
+        load_package(output_dir)
+
+
+def test_load_rejects_duplicate_chunk_ids(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    lines = _chunk_lines(output_dir)
+    lines.append(lines[0])
+    (output_dir / "chunks.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    with pytest.raises(PackageError, match="duplicate chunk_id"):
+        load_package(output_dir)
+
+
+def test_load_rejects_chunk_info_count_mismatch(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    info_path = output_dir / "index" / "chunk_info.json"
+    info = json.loads(_read(info_path))
+    info.pop(next(iter(info)))
+    _write_json(info_path, info)
+
+    with pytest.raises(PackageError, match="chunk_info.json contains"):
+        load_package(output_dir)
+
+
+def test_load_rejects_doc_lengths_count_mismatch(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    lengths_path = output_dir / "index" / "doc_lengths.json"
+    lengths = json.loads(_read(lengths_path))
+    lengths.pop(next(iter(lengths)))
+    _write_json(lengths_path, lengths)
+
+    with pytest.raises(PackageError, match="doc_lengths.json contains"):
+        load_package(output_dir)
+
+
+def test_load_rejects_index_stats_count_mismatch(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    stats_path = output_dir / "index" / "index_stats.json"
+    stats = json.loads(_read(stats_path))
+    stats["N"] += 1
+    _write_json(stats_path, stats)
+
+    with pytest.raises(PackageError, match="index_stats.json.*N"):
+        load_package(output_dir)
+
+
+def test_load_rejects_manifest_statistics_count_mismatch(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    manifest_path = output_dir / MANIFEST_FILENAME
+    manifest = json.loads(_read(manifest_path))
+    manifest["statistics"]["chunks"] += 1
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(PackageError, match="statistics.chunks"):
+        load_package(output_dir)
+
+
+def test_load_rejects_manifest_chunk_records_mismatch(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    manifest_path = output_dir / MANIFEST_FILENAME
+    manifest = json.loads(_read(manifest_path))
+    manifest["artifacts"]["chunks"]["records"] += 1
+    _write_json(manifest_path, manifest)
+
+    with pytest.raises(PackageError, match="records"):
+        load_package(output_dir)
+
+
+def test_load_rejects_build_stats_count_mismatch(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    stats_path = output_dir / BUILD_STATS_FILENAME
+    stats = json.loads(_read(stats_path))
+    stats["chunks"] += 1
+    _write_json(stats_path, stats)
+
+    with pytest.raises(PackageError, match="inconsistent build statistics.*chunks"):
+        load_package(output_dir)
+
+
+def test_load_rejects_corrupt_chunk_info(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+
+    (output_dir / "index" / "chunk_info.json").write_text("{not json", encoding="utf-8")
+
+    with pytest.raises(PackageError, match="invalid index chunk metadata"):
+        load_package(output_dir)
+
+
+def test_build_package_rejects_duplicate_chunk_ids(sample_kb):
+    config, output_dir = sample_kb
+    lines = _chunk_lines(output_dir)
+    lines.append(lines[0])
+    (output_dir / "chunks.jsonl").write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    with pytest.raises(PackageError, match="duplicate chunk_id"):
+        build_package(config)
+
+
+def test_incomplete_build_marker_blocks_loading_and_success_clears_it(sample_kb):
+    config, output_dir = sample_kb
+    build_package(config)
+    assert not (output_dir / BUILD_MARKER_FILENAME).exists()
+
+    marker = output_dir / BUILD_MARKER_FILENAME
+    marker.write_text("simulated interrupted build\n", encoding="utf-8")
+    with pytest.raises(IncompleteBuildError, match="build is incomplete"):
+        load_package(output_dir)
+    with pytest.raises(IncompleteBuildError, match="build is incomplete"):
+        KnowledgeBase.load(output_dir / "index")
+
+    build_package(config)
+    assert not marker.exists()
+    assert load_package(output_dir).index.N > 0

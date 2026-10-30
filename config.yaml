@@ -25,12 +25,12 @@ crawl:
 
 chunking:
   strategy: fixed        # one of: fixed | sentence | paragraph
-  size: 300              # target chunk size in tokens (fixed) or words (others)
+  size: 300              # target chunk size in words for all strategies
   overlap: 50            # overlap between consecutive fixed-size chunks
 
 index:
   bm25: true
-  dense: true
-  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+  dense: false           # dense/embedding retrieval is not implemented
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"  # reserved; unused
 
 output_dir: "./output/demo"

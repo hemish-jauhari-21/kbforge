@@ -1,36 +1,3 @@
-"""Retrieval evaluation for kbforge (Phase 6).
-
-This module implements the classical IR metrics used by the evaluation CLI
-and a small, versionable JSON/JSONL relevance-judgment format.  Retrieval is
-delegated to the existing :class:`kbforge.package.KnowledgeBase`, which in
-turn uses the Phase 4 BM25 and TF-IDF rankers unchanged.
-
-Metric conventions
-------------------
-All metrics operate on a ranked list of *unique* IDs (chunk IDs or document
-IDs).  If a retrieved list contains duplicates, only the first occurrence is
-kept.  This matters for document-level evaluation because several chunks can
-belong to the same document.
-
-Relevance judgments are binary: an ID is either relevant or not.  Empty
-retrieved lists and queries with no relevant IDs produce metric value 0.0
-instead of undefined/NaN values.  Precision@k uses ``k`` as the denominator,
-so missing results in a short list count as non-relevant.  Recall@k divides
-by the total number of judged-relevant IDs.  AP and MAP use the full ranked
-list (not truncated at k); P@k, R@k and nDCG use the cutoff k.  MRR uses the
-full ranked list.
-
-Evaluation units
-----------------
-``chunk``
-    Relevant IDs are chunk IDs and ranked results are chunk IDs.
-``document``
-    Relevant IDs are document IDs.  Retrieved chunks are collapsed to a
-    ranked list of unique document IDs, keeping the first (best-ranked)
-    occurrence of each document.  A relevant document is therefore credited
-    once even if many of its chunks are retrieved.
-"""
-
 from __future__ import annotations
 
 import json
@@ -496,11 +463,19 @@ def evaluate(
             selected.append(mode)
     if not selected:
         raise EvaluationError("at least one ranking mode is required")
+    if not dataset.queries:
+        raise EvaluationError("evaluation dataset contains no queries")
 
     validate_dataset_against_kb(dataset, knowledge_base)
 
+    queries_without_relevant_ids = [
+        judgment.query_id
+        for judgment in dataset.queries
+        if not judgment.relevant_ids
+    ]
     per_query: dict[str, list[dict]] = {}
     aggregate: dict[str, dict] = {}
+    queries_without_results: dict[str, list[str]] = {}
     for mode in selected:
         rows: list[dict] = []
         for judgment in dataset.queries:
@@ -525,6 +500,26 @@ def evaluate(
             )
         per_query[mode] = rows
         aggregate[mode] = _aggregate(rows)
+        queries_without_results[mode] = [
+            row["query_id"] for row in rows if row["retrieved_count"] == 0
+        ]
+
+    notes = [
+        "Binary relevance judgments are used.",
+        "Duplicate retrieved IDs are ignored after their first occurrence.",
+        "P@k, R@k and nDCG use cutoff k; AP/MAP and MRR use the full ranking.",
+        "Queries with no relevant IDs or no retrieved results score 0.0.",
+        "AP/MAP use the full ranked list; missing relevant IDs reduce the score.",
+        "No queries are skipped; every query is evaluated for every selected mode.",
+        "These metrics describe only the supplied judgments, not real-world quality.",
+    ]
+    if dataset.synthetic is True:
+        notes.append(
+            "Synthetic judgments are illustrative only; do not present these "
+            "metrics as real-world quality estimates."
+        )
+    elif dataset.synthetic is None:
+        notes.append("Judgment provenance is unspecified ('synthetic' was not declared).")
 
     report: dict = {
         "format": REPORT_FORMAT,
@@ -545,14 +540,12 @@ def evaluate(
         },
         "aggregate": aggregate,
         "per_query": per_query,
+        "diagnostics": {
+            "queries_without_relevant_ids": queries_without_relevant_ids,
+            "queries_without_results": queries_without_results,
+        },
         "skipped_queries": [],
-        "notes": [
-            "Binary relevance judgments are used.",
-            "Duplicate retrieved IDs are ignored after their first occurrence.",
-            "P@k, R@k and nDCG use cutoff k; AP/MAP and MRR use the full ranking.",
-            "Queries with no relevant IDs or no retrieved results score 0.0.",
-            "AP/MAP use the full ranked list; missing relevant IDs reduce the score.",
-        ],
+        "notes": notes,
     }
 
     if "bm25" in aggregate and "tfidf" in aggregate:
@@ -562,6 +555,10 @@ def evaluate(
                 for metric in ("precision_at_k", "recall_at_k", "mrr", "ndcg_at_k", "map")
             }
         }
+        notes.append(
+            "bm25_minus_tfidf is a descriptive paired difference on the same "
+            "queries and judgments, not a significance test."
+        )
     return report
 
 

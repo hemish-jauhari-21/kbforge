@@ -1,0 +1,81 @@
+{
+  "format": "kbforge-evaluation",
+  "format_version": "1.0",
+  "name": "manual-test synthetic document judgments",
+  "description": "Small illustrative judgments for output/manual-test. These labels are synthetic and are not authoritative relevance assessments.",
+  "synthetic": true,
+  "unit": "document",
+  "queries": [
+    {
+      "query_id": "q-download-windows",
+      "query": "download python for windows",
+      "relevant": [
+        "web-67632c9b4c0a",
+        "web-7a0ceb114496",
+        "web-58b1f3b2155f"
+      ]
+    },
+    {
+      "query_id": "q-documentation",
+      "query": "official python documentation and beginner tutorials",
+      "relevant": [
+        "web-a18cf7050f39",
+        "web-e3ad82ea072e",
+        "web-70db3c1783b5"
+      ]
+    },
+    {
+      "query_id": "q-community",
+      "query": "python community mailing lists forums and irc",
+      "relevant": [
+        "web-83a981a92db2",
+        "web-8d94181c4cb9",
+        "web-edd88fc4cae2",
+        "web-929c179b10ef"
+      ]
+    },
+    {
+      "query_id": "q-events",
+      "query": "python events conferences workshops calendars",
+      "relevant": [
+        "web-1fe68a7318ce",
+        "web-83a42195890f",
+        "web-ab2f5b8d0b63",
+        "web-a5357a81fafe"
+      ]
+    },
+    {
+      "query_id": "q-success-stories",
+      "query": "python success stories business",
+      "relevant": [
+        "web-60cb6994e60b",
+        "web-34fa41dce805",
+        "web-5f617c638c0b"
+      ]
+    },
+    {
+      "query_id": "q-psf-report",
+      "query": "python software foundation annual impact report",
+      "relevant": [
+        "web-8fb3d36076e0",
+        "web-7005d0672eb2"
+      ]
+    },
+    {
+      "query_id": "q-about-applications",
+      "query": "about python applications and quotes",
+      "relevant": [
+        "web-2f8b36236fb5",
+        "web-948ef18d655b",
+        "web-3e873a95818b"
+      ]
+    },
+    {
+      "query_id": "q-support-notes",
+      "query": "client onboarding support contact api keys notes",
+      "relevant": [
+        "file-60d9f7d3e038"
+      ]
+    }
+  ]
+}

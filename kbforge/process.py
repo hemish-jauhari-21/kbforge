@@ -1,5 +1,3 @@
-"""Phase 2 processing pipeline: cleaning and deduplication."""
-
 from __future__ import annotations
 
 import json
@@ -15,6 +13,19 @@ from kbforge.documents import Document, write_documents_jsonl
 logger = logging.getLogger("kbforge.process")
 
 
+def _partition_cleaning_diagnostics(
+    diagnostics: Iterable[dict],
+) -> tuple[list[dict], list[dict]]:
+    warnings = []
+    exclusions = []
+    for diagnostic in diagnostics:
+        if diagnostic.get("outcome") == "excluded":
+            exclusions.append(diagnostic)
+        else:
+            warnings.append(diagnostic)
+    return warnings, exclusions
+
+
 def process_documents(
     documents: Iterable[Document],
     config: Config | None = None,
@@ -23,34 +34,36 @@ def process_documents(
 ):
     """
     Process documents through Phase 2: cleaning and deduplication.
-    Returns (processed_documents, removal_log, stats)
+    Returns (processed_documents, duplicate_removals, cleaning_diagnostics, stats)
     """
     docs_list = list(documents)
-    
+
     cleaning_enabled = enable_cleaning if enable_cleaning is not None else (config.cleaning.enabled if config and hasattr(config, 'cleaning') else True)
     dedup_enabled = enable_deduplication if enable_deduplication is not None else (config.deduplication.enabled if config and hasattr(config, 'deduplication') else True)
-    
+
     all_stats = {
         "input_documents": len(docs_list),
+        "duplicate_removals": 0,
+        "cleaning_warnings": 0,
+        "documents_excluded_by_cleaning": 0,
     }
     removal_log = []
-    cleaning_failures = []
-    
+    cleaning_diagnostics = []
+
     current_docs = docs_list
-    
+
     # Stage 1: Cleaning
     if cleaning_enabled:
-        current_docs, cleaning_failures, clean_stats = clean_documents(current_docs)
+        current_docs, cleaning_diagnostics, clean_stats = clean_documents(current_docs)
         all_stats.update(clean_stats)
-        if cleaning_failures:
-            for cf in cleaning_failures:
-                removal_log.append({
-                    "type": "cleaning_failure",
-                    **cf
-                })
+        cleaning_warnings, cleaning_exclusions = _partition_cleaning_diagnostics(
+            cleaning_diagnostics
+        )
+        all_stats["cleaning_warnings"] = len(cleaning_warnings)
+        all_stats["documents_excluded_by_cleaning"] = len(cleaning_exclusions)
     else:
         all_stats["cleaning_skipped"] = True
-    
+
     # Stage 2: Deduplication
     if dedup_enabled and config and hasattr(config, 'deduplication'):
         dedup_cfg = config.deduplication
@@ -70,10 +83,11 @@ def process_documents(
         removal_log.extend(dedup_removals)
     else:
         all_stats["deduplication_skipped"] = True
-    
+
+    all_stats["duplicate_removals"] = len(removal_log)
     all_stats["output_documents"] = len(current_docs)
-    
-    return current_docs, removal_log, all_stats
+
+    return current_docs, removal_log, cleaning_diagnostics, all_stats
 
 
 def run_process(config: Config, documents: Iterable[Document] | None = None, input_path: str | Path | None = None) -> dict:
@@ -87,7 +101,12 @@ def run_process(config: Config, documents: Iterable[Document] | None = None, inp
         input_path = Path(config.output_dir) / "documents.jsonl"
         documents = read_documents_jsonl(input_path)
     
-    processed_docs, removal_log, stats = process_documents(documents, config=config)
+    processed_docs, removal_log, cleaning_diagnostics, stats = process_documents(
+        documents, config=config
+    )
+    cleaning_warnings, cleaning_exclusions = _partition_cleaning_diagnostics(
+        cleaning_diagnostics
+    )
     
     output_dir = Path(config.output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
@@ -100,6 +119,8 @@ def run_process(config: Config, documents: Iterable[Document] | None = None, inp
     removal_log_path = output_dir / "removal_log.json"
     removal_log_data = {
         "removals": removal_log,
+        "cleaning_warnings": cleaning_warnings,
+        "cleaning_exclusions": cleaning_exclusions,
         "stats": stats,
     }
     removal_log_path.write_text(json.dumps(removal_log_data, indent=2, ensure_ascii=False), encoding="utf-8")
@@ -111,6 +132,8 @@ def run_process(config: Config, documents: Iterable[Document] | None = None, inp
     return {
         "processed_documents": len(processed_docs),
         "removals": len(removal_log),
+        "cleaning_warnings": len(cleaning_warnings),
+        "cleaning_exclusions": len(cleaning_exclusions),
         "cleaned_path": str(cleaned_path),
         "removal_log_path": str(removal_log_path),
         "stats_path": str(stats_path),
@@ -127,9 +150,13 @@ def run_chunk(config, documents=None, input_path=None):
     if documents is None and input_path is not None:
         documents = read_documents_jsonl(input_path)
     elif documents is None:
-        # Try cleaned first, then original
+        cleaning_enabled = getattr(getattr(config, "cleaning", None), "enabled", True)
+        dedup_enabled = getattr(getattr(config, "deduplication", None), "enabled", True)
+        phase2_enabled = cleaning_enabled or dedup_enabled
+        # Only use cleaned documents when Phase 2 ran for this build. Otherwise
+        # a cleaned file left by an earlier build would be silently reused.
         cleaned_path = Path(config.output_dir) / "documents_cleaned.jsonl"
-        if cleaned_path.exists():
+        if phase2_enabled and cleaned_path.exists():
             documents = read_documents_jsonl(cleaned_path)
         else:
             documents = read_documents_jsonl(Path(config.output_dir) / "documents.jsonl")

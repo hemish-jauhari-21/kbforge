@@ -1,43 +1,17 @@
-"""Knowledge-base packaging and loading (Phase 5).
-
-A *package* is an existing ``output_dir`` plus a small set of metadata
-files.  The package deliberately references the artifacts written by the
-ingestion, cleaning, chunking and indexing phases instead of copying them:
-
-    output_dir/
-      manifest.json          package manifest (format + artifact paths)
-      build_config.json      safe, credential-free configuration summary
-      build_stats.json       aggregated build/index statistics
-      documents.jsonl        raw ingestion output (optional for querying)
-      documents_cleaned.jsonl
-      chunks.jsonl           chunk text + metadata for result reconstruction
-      index/                 inverted index, BM25/TF-IDF source data
-        postings.json
-        doc_lengths.json
-        chunk_info.json
-        df.json
-        index_stats.json
-
-Only ``manifest.json``, ``build_config.json`` and ``build_stats.json`` are
-new.  All artifact paths in the manifest are relative to the manifest so
-the directory can be moved as a unit.  The format is versioned with
-``format_version``; loaders reject versions they do not understand.
-
-Ranking is *not* reimplemented here: :class:`KnowledgeBase` delegates to
-the existing :class:`kbforge.index.BM25` and :class:`kbforge.index.TFIDF`
-implementations.
-"""
-
 from __future__ import annotations
 
 import json
 import logging
+import math
 import os
+import tempfile
+import zipfile
 from dataclasses import dataclass
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import Any
 
 from kbforge import __version__
+from kbforge.config import VALID_RANKING_MODES
 from kbforge.index import BM25, InvertedIndex, SearchResult, TFIDF
 
 logger = logging.getLogger("kbforge.package")
@@ -45,11 +19,13 @@ logger = logging.getLogger("kbforge.package")
 PACKAGE_FORMAT = "kbforge-knowledge-base"
 PACKAGE_FORMAT_VERSION = "1.0"
 SUPPORTED_FORMAT_VERSIONS = (PACKAGE_FORMAT_VERSION,)
-SUPPORTED_RANKING_MODES = ("bm25", "tfidf")
+SUPPORTED_RANKING_MODES = VALID_RANKING_MODES
 
 MANIFEST_FILENAME = "manifest.json"
+README_FILENAME = "README.md"
 BUILD_CONFIG_FILENAME = "build_config.json"
 BUILD_STATS_FILENAME = "build_stats.json"
+BUILD_MARKER_FILENAME = ".kbforge-build-incomplete"
 BUILD_CONFIG_FORMAT = "kbforge-build-config"
 BUILD_STATS_FORMAT = "kbforge-build-stats"
 
@@ -72,6 +48,18 @@ REQUIRED_ARTIFACT_KEYS = (
     "build_stats",
 )
 
+REQUIRED_ARTIFACT_FORMATS = {
+    "chunks": "jsonl",
+    "index": "directory",
+    "index/postings": "json",
+    "index/doc_lengths": "json",
+    "index/chunk_info": "json",
+    "index/df": "json",
+    "index/index_stats": "json",
+    "build_config": "json",
+    "build_stats": "json",
+}
+
 
 class PackageError(Exception):
     """Base class for package problems (missing/corrupt/incompatible)."""
@@ -83,6 +71,10 @@ class MissingArtifactError(PackageError):
 
 class IncompatiblePackageError(PackageError):
     """The package format or version is not supported."""
+
+
+class IncompleteBuildError(PackageError):
+    """The package was left in an incomplete build state."""
 
 
 @dataclass(frozen=True)
@@ -130,6 +122,33 @@ def _write_json(path: Path, data: Any) -> None:
         encoding="utf-8",
     )
     os.replace(tmp, path)
+
+
+def mark_build_in_progress(output_dir: str | Path) -> Path:
+    """Mark an output directory as containing a build that is not complete."""
+    output_dir = Path(output_dir)
+    output_dir.mkdir(parents=True, exist_ok=True)
+    marker = output_dir / BUILD_MARKER_FILENAME
+    marker.write_text("kbforge build did not complete\n", encoding="utf-8")
+    return marker
+
+
+def _clear_build_marker(output_dir: str | Path) -> None:
+    marker = Path(output_dir) / BUILD_MARKER_FILENAME
+    try:
+        marker.unlink()
+    except FileNotFoundError:
+        pass
+
+
+def _raise_if_build_incomplete(directory: str | Path) -> None:
+    marker = Path(directory) / BUILD_MARKER_FILENAME
+    if marker.is_file():
+        raise IncompleteBuildError(
+            "package build is incomplete "
+            f"(found {BUILD_MARKER_FILENAME}); "
+            "rerun 'kbforge build' or 'kbforge package' successfully before loading"
+        )
 
 
 def _read_json(path: Path, description: str) -> Any:
@@ -205,6 +224,7 @@ def _config_summary(config) -> dict:
             "delay_seconds": getattr(crawl, "delay_seconds", None),
             "timeout_seconds": getattr(crawl, "timeout_seconds", None),
             "retries": getattr(crawl, "retries", None),
+            "include_subdomains": getattr(crawl, "include_subdomains", True),
         }
     if chunking is not None:
         summary["chunking"] = {
@@ -217,6 +237,9 @@ def _config_summary(config) -> dict:
             "bm25": getattr(index, "bm25", None),
             "dense": getattr(index, "dense", None),
             "embedding_model": getattr(index, "embedding_model", None),
+            "ranking_modes": list(
+                getattr(index, "ranking_modes", SUPPORTED_RANKING_MODES)
+            ),
         }
     if cleaning is not None:
         summary["cleaning"] = {"enabled": getattr(cleaning, "enabled", None)}
@@ -285,6 +308,14 @@ def _build_statistics(output_dir: Path, chunks_count: int, index_stats: dict) ->
     return stats
 
 
+def _configured_ranking_modes(config) -> list[str]:
+    index = getattr(config, "index", None)
+    modes = getattr(index, "ranking_modes", None)
+    if not modes:
+        return list(SUPPORTED_RANKING_MODES)
+    return [str(mode) for mode in modes]
+
+
 def build_package(
     config=None,
     output_dir: str | Path | None = None,
@@ -303,6 +334,9 @@ def build_package(
     output_dir = Path(output_dir)
     package_root = Path(package_dir) if package_dir is not None else output_dir
     package_root.mkdir(parents=True, exist_ok=True)
+    mark_build_in_progress(package_root)
+    if package_root != output_dir:
+        mark_build_in_progress(output_dir)
 
     index_dir = output_dir / "index"
     chunks_path = output_dir / "chunks.jsonl"
@@ -321,11 +355,24 @@ def build_package(
             + ", ".join(sorted(missing))
         )
 
-    chunks_count = _validate_chunks(chunks_path)
+    chunk_texts = _validate_chunks(chunks_path, collect_text=True)
+    if not isinstance(chunk_texts, dict):
+        chunk_texts = {}
+    chunks_count = len(chunk_texts)
+    chunk_ids = set(chunk_texts)
 
-    index_stats = _read_json(index_dir / "index_stats.json", "index statistics")
-    if not isinstance(index_stats, dict):
-        raise PackageError("invalid index statistics: expected a JSON object")
+    index_stats = _read_index_stats(index_dir / "index_stats.json")
+    chunk_info = _read_json_object(index_dir / "chunk_info.json", "index chunk metadata")
+    doc_lengths = _read_json_object(index_dir / "doc_lengths.json", "index document lengths")
+    _read_json_object(index_dir / "postings.json", "index postings")
+    _read_json_object(index_dir / "df.json", "index document frequencies")
+    _validate_index_inventory(
+        chunks_count=chunks_count,
+        chunk_ids=chunk_ids,
+        index_stats=index_stats,
+        chunk_info=chunk_info,
+        doc_lengths=doc_lengths,
+    )
 
     config_summary = _config_summary(config)
     config_summary["format"] = BUILD_CONFIG_FORMAT
@@ -373,12 +420,13 @@ def build_package(
         if path.is_file():
             artifacts[key] = _artifact(path, package_root, fmt, required=False)
 
+    ranking_modes = _configured_ranking_modes(config)
     manifest = {
         "format": PACKAGE_FORMAT,
         "format_version": PACKAGE_FORMAT_VERSION,
         "kbforge_version": __version__,
         "client_name": getattr(config, "client_name", None),
-        "ranking_modes": list(SUPPORTED_RANKING_MODES),
+        "ranking_modes": ranking_modes,
         "statistics": {
             "chunks": chunks_count,
             "chunks_indexed": index_stats.get("N"),
@@ -391,6 +439,9 @@ def build_package(
     _write_json(config_path, config_summary)
     _write_json(stats_path, build_stats)
     _write_json(manifest_path, manifest)
+    _clear_build_marker(package_root)
+    if package_root != output_dir:
+        _clear_build_marker(output_dir)
 
     return {
         "package_dir": str(package_root),
@@ -398,7 +449,7 @@ def build_package(
         "build_config_path": str(config_path),
         "build_stats_path": str(stats_path),
         "chunks": chunks_count,
-        "ranking_modes": list(SUPPORTED_RANKING_MODES),
+        "ranking_modes": ranking_modes,
     }
 
 
@@ -419,6 +470,7 @@ def _load_manifest(path: str | Path) -> Manifest:
         raise MissingArtifactError(
             f"no {MANIFEST_FILENAME} found in {path}"
         )
+    _raise_if_build_incomplete(manifest_path.parent)
     data = _read_json(manifest_path, "package manifest")
     if not isinstance(data, dict):
         raise IncompatiblePackageError("invalid package manifest: expected a JSON object")
@@ -443,6 +495,15 @@ def _load_manifest(path: str | Path) -> Manifest:
         if not isinstance(entry, dict) or not entry.get("path"):
             missing.append(key)
             continue
+        if entry.get("format") != REQUIRED_ARTIFACT_FORMATS[key]:
+            raise IncompatiblePackageError(
+                f"manifest artifact '{key}' has format {entry.get('format')!r}; "
+                f"expected {REQUIRED_ARTIFACT_FORMATS[key]!r}"
+            )
+        if entry.get("required") is not True:
+            raise IncompatiblePackageError(
+                f"manifest artifact '{key}' must be marked as required"
+            )
         resolved = manifest.artifact_path(key)
         if not resolved.exists():
             missing.append(key)
@@ -458,9 +519,158 @@ def _validate_json_artifact(path: Path, description: str) -> Any:
     return data
 
 
+def _read_json_object(path: Path, description: str) -> dict:
+    data = _read_json(path, description)
+    if not isinstance(data, dict):
+        raise PackageError(f"invalid {description}: expected a JSON object")
+    return data
+
+
+def _read_index_stats(path: Path) -> dict:
+    stats = _read_json_object(path, "index statistics")
+    if "N" not in stats or "avgdl" not in stats:
+        raise PackageError("invalid index statistics: 'N' and 'avgdl' are required")
+    count = stats["N"]
+    if isinstance(count, bool) or not isinstance(count, int) or count < 0:
+        raise PackageError("invalid index statistics: 'N' must be a non-negative integer")
+    avgdl = stats["avgdl"]
+    if (
+        isinstance(avgdl, bool)
+        or not isinstance(avgdl, (int, float))
+        or not math.isfinite(avgdl)
+        or avgdl < 0
+    ):
+        raise PackageError("invalid index statistics: 'avgdl' must be a finite non-negative number")
+    return stats
+
+
+def _summarize_ids(ids: set[str]) -> str:
+    ordered = sorted(ids)
+    shown = ", ".join(ordered[:5])
+    if len(ordered) > 5:
+        shown += f", ... ({len(ordered)} total)"
+    return shown
+
+
+def _validate_index_inventory(
+    *,
+    chunks_count: int,
+    chunk_ids: set[str],
+    index_stats: dict,
+    chunk_info: dict,
+    doc_lengths: dict,
+) -> None:
+    """Ensure chunk and index artifacts describe the same corpus."""
+    info_count = len(chunk_info)
+    if info_count != chunks_count:
+        raise PackageError(
+            "inconsistent package: chunks.jsonl contains "
+            f"{chunks_count} chunk(s) but index/chunk_info.json contains {info_count}"
+        )
+    lengths_count = len(doc_lengths)
+    if lengths_count != chunks_count:
+        raise PackageError(
+            "inconsistent package: chunks.jsonl contains "
+            f"{chunks_count} chunk(s) but index/doc_lengths.json contains {lengths_count}"
+        )
+    index_count = index_stats["N"]
+    if index_count != chunks_count:
+        raise PackageError(
+            "inconsistent package: index_stats.json has "
+            f"N={index_count} but chunks.jsonl contains {chunks_count} chunk(s)"
+        )
+
+    info_ids = set(chunk_info)
+    if info_ids != chunk_ids:
+        missing = chunk_ids - info_ids
+        extra = info_ids - chunk_ids
+        details = []
+        if missing:
+            details.append(f"missing from chunk_info: {_summarize_ids(missing)}")
+        if extra:
+            details.append(f"unknown in chunk_info: {_summarize_ids(extra)}")
+        raise PackageError(
+            "inconsistent package: chunks.jsonl and index/chunk_info.json "
+            "have different chunk IDs (" + "; ".join(details) + ")"
+        )
+
+    length_ids = set(doc_lengths)
+    if length_ids != chunk_ids:
+        missing = chunk_ids - length_ids
+        extra = length_ids - chunk_ids
+        details = []
+        if missing:
+            details.append(f"missing from doc_lengths: {_summarize_ids(missing)}")
+        if extra:
+            details.append(f"unknown in doc_lengths: {_summarize_ids(extra)}")
+        raise PackageError(
+            "inconsistent package: chunks.jsonl and index/doc_lengths.json "
+            "have different chunk IDs (" + "; ".join(details) + ")"
+        )
+
+
+def _validate_manifest_counts(
+    manifest_data: dict,
+    *,
+    chunks_count: int,
+    index_count: int,
+) -> None:
+    chunk_entry = manifest_data.get("artifacts", {}).get("chunks", {})
+    records = chunk_entry.get("records") if isinstance(chunk_entry, dict) else None
+    if records is not None and records != chunks_count:
+        raise PackageError(
+            "inconsistent package manifest: chunks artifact records "
+            f"{records!r} does not match chunks.jsonl count {chunks_count}"
+        )
+
+    statistics = manifest_data.get("statistics")
+    if statistics is None:
+        return
+    if not isinstance(statistics, dict):
+        raise PackageError("invalid package manifest: 'statistics' must be an object")
+    expected = {
+        "chunks": chunks_count,
+        "chunks_indexed": index_count,
+    }
+    for field, actual in expected.items():
+        if field in statistics and statistics[field] != actual:
+            raise PackageError(
+                "inconsistent package manifest: "
+                f"statistics.{field}={statistics[field]!r} does not match {actual}"
+            )
+
+
+def _validate_build_stats_counts(
+    build_stats: dict,
+    *,
+    chunks_count: int,
+    index_count: int,
+) -> None:
+    if "chunks" in build_stats and build_stats["chunks"] != chunks_count:
+        raise PackageError(
+            "inconsistent build statistics: "
+            f"chunks={build_stats['chunks']!r} does not match chunks.jsonl count {chunks_count}"
+        )
+    index_stats = build_stats.get("index")
+    if index_stats is None:
+        return
+    if not isinstance(index_stats, dict):
+        raise PackageError("invalid build statistics: 'index' must be an object")
+    if (
+        "chunks_indexed" in index_stats
+        and index_stats["chunks_indexed"] != index_count
+    ):
+        raise PackageError(
+            "inconsistent build statistics: "
+            f"index.chunks_indexed={index_stats['chunks_indexed']!r} "
+            f"does not match index_stats.json N={index_count}"
+        )
+
+
 def _validate_chunks(path: Path, *, collect_text: bool = False) -> int | dict[str, str]:
     count = 0
     chunk_text: dict[str, str] = {}
+    seen: dict[str, int] = {}
     try:
         with path.open("r", encoding="utf-8") as fh:
             for line_number, line in enumerate(fh, start=1):
@@ -477,13 +687,20 @@ def _validate_chunks(path: Path, *, collect_text: bool = False) -> int | dict[st
                         f"invalid chunks artifact: line {line_number} is not an object"
                     )
                 chunk_id = record.get("chunk_id") or record.get("id")
-                if not chunk_id:
+                if not isinstance(chunk_id, str) or not chunk_id.strip():
                     raise PackageError(
                         f"invalid chunks artifact: line {line_number} has no chunk_id"
                     )
+                if chunk_id in seen:
+                    raise PackageError(
+                        "invalid chunks artifact: duplicate chunk_id "
+                        f"{chunk_id!r} at line {line_number} "
+                        f"(first seen at line {seen[chunk_id]})"
+                    )
+                seen[chunk_id] = line_number
                 if collect_text:
                     text = record.get("text", "")
-                    chunk_text[str(chunk_id)] = text if isinstance(text, str) else ""
+                    chunk_text[chunk_id] = text if isinstance(text, str) else ""
                 count += 1
     except FileNotFoundError as exc:
         raise MissingArtifactError(f"missing chunks artifact: {path.name}") from exc
@@ -523,6 +740,7 @@ class KnowledgeBase:
         index_dir = Path(index_dir)
         if not (index_dir / "postings.json").is_file():
             raise MissingArtifactError(f"index not found in {index_dir}")
+        _raise_if_build_incomplete(index_dir.parent)
         try:
             for name in INDEX_FILENAMES:
                 _validate_json_artifact(index_dir / name, f"index artifact '{name}'")
@@ -552,24 +770,47 @@ class KnowledgeBase:
         chunk_texts = _validate_chunks(chunks_path, collect_text=True)
         if not isinstance(chunk_texts, dict):
             chunk_texts = {}
+        chunks_count = len(chunk_texts)
+        chunk_ids = set(chunk_texts)
 
         # Validate the small metadata artifacts eagerly so corrupt files are
         # reported with a useful name rather than during the first query.
         _validate_json_artifact(manifest.artifact_path("build_config"), "build configuration")
-        _validate_json_artifact(manifest.artifact_path("build_stats"), "build statistics")
+        build_stats = _read_json_object(
+            manifest.artifact_path("build_stats"), "build statistics"
+        )
 
         index_stats_path = manifest.artifact_path("index/index_stats")
-        index_stats = _validate_json_artifact(index_stats_path, "index statistics")
-        if not isinstance(index_stats, dict) or "N" not in index_stats or "avgdl" not in index_stats:
-            raise PackageError("invalid index statistics: 'N' and 'avgdl' are required")
+        index_stats = _read_index_stats(index_stats_path)
+        chunk_info = _read_json_object(
+            manifest.artifact_path("index/chunk_info"), "index chunk metadata"
+        )
+        doc_lengths = _read_json_object(
+            manifest.artifact_path("index/doc_lengths"), "index document lengths"
+        )
+        _validate_index_inventory(
+            chunks_count=chunks_count,
+            chunk_ids=chunk_ids,
+            index_stats=index_stats,
+            chunk_info=chunk_info,
+            doc_lengths=doc_lengths,
+        )
+        _validate_manifest_counts(
+            manifest.data,
+            chunks_count=chunks_count,
+            index_count=index_stats["N"],
+        )
+        _validate_build_stats_counts(
+            build_stats,
+            chunks_count=chunks_count,
+            index_count=index_stats["N"],
+        )
 
         for key in (
             "index/postings",
-            "index/doc_lengths",
-            "index/chunk_info",
             "index/df",
         ):
-            _validate_json_artifact(manifest.artifact_path(key), f"index artifact '{key}'")
+            _read_json_object(manifest.artifact_path(key), f"index artifact '{key}'")
 
         index_dir_entry = artifacts.get("index")
         if isinstance(index_dir_entry, dict) and index_dir_entry.get("path"):
@@ -651,3 +892,569 @@ class KnowledgeBase:
             if not result.text:
                 result.text = self.chunk_texts.get(result.chunk_id, "")
         return results
+
+
+def _artifact_relative_path(
+    manifest: Manifest,
+    key: str,
+    entry: Any,
+    *,
+    required: bool,
+) -> PurePosixPath | None:
+    """Return a safe, normalized artifact path relative to the manifest root."""
+    if not isinstance(entry, dict):
+        if required:
+            raise IncompatiblePackageError(f"invalid manifest artifact '{key}'")
+        return None
+    raw_path = entry.get("path")
+    if not isinstance(raw_path, str) or not raw_path:
+        if required:
+            raise MissingArtifactError(f"manifest has no artifact path for '{key}'")
+        return None
+    if "\\" in raw_path:
+        raise PackageError(
+            f"unsafe artifact path for '{key}': backslashes are not allowed"
+        )
+
+    relative = PurePosixPath(raw_path)
+    if relative.is_absolute() or not relative.parts or ".." in relative.parts:
+        raise PackageError(
+            f"unsafe artifact path for '{key}': absolute paths and '..' are not allowed"
+        )
+    if len(relative.parts[0]) == 2 and relative.parts[0][1] == ":":
+        raise PackageError(
+            f"unsafe artifact path for '{key}': drive-qualified paths are not allowed"
+        )
+
+    candidate = manifest.root / relative
+    if candidate.is_symlink():
+        raise PackageError(f"artifact '{key}' must not be a symlink: {raw_path}")
+    resolved_root = manifest.root.resolve()
+    try:
+        resolved = candidate.resolve()
+    except OSError as exc:
+        raise PackageError(f"could not resolve artifact '{key}': {exc}") from exc
+    if not resolved.is_relative_to(resolved_root):
+        raise PackageError(
+            f"artifact '{key}' resolves outside the package root: {raw_path}"
+        )
+    return relative
+
+
+def _add_export_file(
+    files: dict[str, Path],
+    arcname: str,
+    source: Path,
+    description: str,
+) -> None:
+    """Add one validated file to the export set, rejecting unsafe entry names."""
+    relative = PurePosixPath(arcname)
+    if (
+        relative.is_absolute()
+        or not relative.parts
+        or ".." in relative.parts
+        or "\\" in arcname
+    ):
+        raise PackageError(f"unsafe archive entry name for {description}: {arcname!r}")
+    if len(relative.parts[0]) == 2 and relative.parts[0][1] == ":":
+        raise PackageError(
+            f"unsafe archive entry name for {description}: {arcname!r}"
+        )
+
+    existing = files.get(arcname)
+    if existing is not None:
+        if existing.resolve() != source.resolve():
+            raise PackageError(
+                f"duplicate archive entry {arcname!r} for {description}"
+            )
+        return
+    files[arcname] = source
+
+
+def _validate_optional_export_file(
+    path: Path,
+    fmt: str,
+    description: str,
+) -> None:
+    """Ensure a present optional file is valid before including it."""
+    if fmt == "json":
+        _read_json(path, description)
+        return
+    if fmt == "jsonl":
+        try:
+            with path.open("r", encoding="utf-8") as fh:
+                for line_number, line in enumerate(fh, start=1):
+                    if not line.strip():
+                        continue
+                    try:
+                        json.loads(line)
+                    except json.JSONDecodeError as exc:
+                        raise PackageError(
+                            f"invalid {description} '{path.name}': "
+                            f"line {line_number}: {exc.msg}"
+                        ) from exc
+        except FileNotFoundError as exc:
+            raise MissingArtifactError(
+                f"missing {description}: {path.name}"
+            ) from exc
+        except (OSError, UnicodeDecodeError) as exc:
+            raise PackageError(f"invalid {description} '{path.name}': {exc}") from exc
+        return
+    raise IncompatiblePackageError(
+        f"invalid {description}: unsupported format {fmt!r}"
+    )
+
+
+def _add_directory_export_files(
+    files: dict[str, Path],
+    directory: Path,
+    prefix: PurePosixPath,
+    description: str,
+    resolved_root: Path,
+) -> None:
+    """Add regular files below a manifest-listed directory artifact."""
+    for current, dirnames, filenames in os.walk(directory, followlinks=False):
+        current_path = Path(current)
+        for dirname in dirnames:
+            child = current_path / dirname
+            if child.is_symlink():
+                raise PackageError(
+                    f"artifact '{description}' contains a symlink: "
+                    f"{child.relative_to(directory).as_posix()}"
+                )
+        for filename in filenames:
+            source = current_path / filename
+            if source.is_symlink():
+                raise PackageError(
+                    f"artifact '{description}' contains a symlink: "
+                    f"{source.relative_to(directory).as_posix()}"
+                )
+            try:
+                resolved = source.resolve()
+            except OSError as exc:
+                raise PackageError(
+                    f"could not resolve artifact file '{source.name}': {exc}"
+                ) from exc
+            if not resolved.is_relative_to(resolved_root):
+                raise PackageError(
+                    f"artifact '{description}' contains a path outside the package root: "
+                    f"{source.relative_to(directory).as_posix()}"
+                )
+            if not source.is_file():
+                raise PackageError(
+                    f"artifact '{description}' contains a non-regular file: "
+                    f"{source.relative_to(directory).as_posix()}"
+                )
+            relative = source.relative_to(directory)
+            arcname = PurePosixPath(prefix, *relative.parts).as_posix()
+            _add_export_file(files, arcname, source, f"artifact '{description}'")
+
+
+def _collect_export_files(manifest: Manifest) -> dict[str, Path]:
+    """Build the manifest allowlist of files to include in an archive."""
+    if manifest.path.is_symlink():
+        raise PackageError("package manifest must not be a symlink")
+    resolved_root = manifest.root.resolve()
+    try:
+        resolved_manifest = manifest.path.resolve()
+    except OSError as exc:
+        raise PackageError(f"could not resolve package manifest: {exc}") from exc
+    if not resolved_manifest.is_relative_to(resolved_root):
+        raise PackageError("package manifest resolves outside the package root")
+
+    files: dict[str, Path] = {}
+    _add_export_file(files, MANIFEST_FILENAME, manifest.path, "package manifest")
+
+    artifacts = manifest.data["artifacts"]
+    for key in sorted(artifacts):
+        entry = artifacts[key]
+        required = key in REQUIRED_ARTIFACT_KEYS
+        relative = _artifact_relative_path(manifest, key, entry, required=required)
+        if relative is None:
+            continue
+
+        candidate = manifest.root / relative
+        if not candidate.exists():
+            if required:
+                raise MissingArtifactError(f"missing artifact '{key}': {relative.as_posix()}")
+            logger.warning("skipping missing optional artifact '%s': %s", key, relative)
+            continue
+        if candidate.is_symlink():
+            raise PackageError(
+                f"artifact '{key}' must not be a symlink: {relative.as_posix()}"
+            )
+
+        fmt = entry.get("format")
+        if not isinstance(fmt, str) or fmt not in {"json", "jsonl", "directory"}:
+            raise IncompatiblePackageError(
+                f"invalid manifest artifact '{key}': unsupported format {fmt!r}"
+            )
+        if candidate.is_dir():
+            if fmt != "directory":
+                raise IncompatiblePackageError(
+                    f"invalid manifest artifact '{key}': expected a file, found a directory"
+                )
+            _add_directory_export_files(
+                files, candidate, relative, key, resolved_root
+            )
+        elif candidate.is_file():
+            if fmt == "directory":
+                raise IncompatiblePackageError(
+                    f"invalid manifest artifact '{key}': expected a directory, found a file"
+                )
+            if not required:
+                _validate_optional_export_file(
+                    candidate, fmt, f"optional artifact '{key}'"
+                )
+            _add_export_file(
+                files, relative.as_posix(), candidate, f"artifact '{key}'"
+            )
+        else:
+            raise PackageError(
+                f"artifact '{key}' is not a regular file or directory: "
+                f"{relative.as_posix()}"
+            )
+
+    return files
+
+
+def _first_nonnegative_int(*values: Any) -> int | None:
+    for value in values:
+        if isinstance(value, int) and not isinstance(value, bool) and value >= 0:
+            return value
+    return None
+
+
+def _included_optional_artifact_paths(
+    manifest: Manifest,
+    file_names: set[str],
+) -> list[str]:
+    paths: list[str] = []
+    for key, entry in sorted(manifest.data["artifacts"].items()):
+        if not isinstance(entry, dict) or entry.get("required") is True:
+            continue
+        raw_path = entry.get("path")
+        if not isinstance(raw_path, str) or not raw_path:
+            continue
+        arcname = PurePosixPath(raw_path).as_posix()
+        if arcname in file_names or any(
+            name.startswith(arcname + "/") for name in file_names
+        ):
+            paths.append(arcname)
+    return paths
+
+
+def _render_package_readme(
+    manifest: Manifest,
+    *,
+    file_names: set[str],
+    kb: KnowledgeBase,
+) -> str:
+    data = manifest.data
+    build_stats = _read_json_object(
+        manifest.artifact_path("build_stats"), "build statistics"
+    )
+    statistics = data.get("statistics")
+    if not isinstance(statistics, dict):
+        statistics = {}
+    index_stats = build_stats.get("index")
+    if not isinstance(index_stats, dict):
+        index_stats = {}
+    processing = build_stats.get("processing")
+    if not isinstance(processing, dict):
+        processing = {}
+    ingestion = build_stats.get("ingestion")
+    if not isinstance(ingestion, dict):
+        ingestion = {}
+
+    chunks = _first_nonnegative_int(
+        statistics.get("chunks"),
+        build_stats.get("chunks"),
+        kb.index.N,
+    )
+    chunks_indexed = _first_nonnegative_int(
+        statistics.get("chunks_indexed"),
+        index_stats.get("chunks_indexed"),
+        kb.index.N,
+    )
+    documents = _first_nonnegative_int(
+        build_stats.get("documents_cleaned"),
+        build_stats.get("documents_raw"),
+        processing.get("output_documents"),
+        processing.get("documents_cleaned"),
+        ingestion.get("documents_written"),
+    )
+    modes = list(kb.supported_modes)
+    example_mode = modes[0] if modes else "bm25"
+    mode_labels = {"bm25": "BM25", "tfidf": "TF-IDF"}
+
+    lines = [
+        "# KBForge Knowledge Base",
+        "",
+        "This ZIP contains a prebuilt KBForge lexical search package. The index "
+        "can be loaded and searched locally without crawling, cleaning, chunking, "
+        "or rebuilding the source data.",
+        "",
+        "## Package details",
+        "",
+    ]
+    client_name = data.get("client_name")
+    if isinstance(client_name, str) and client_name.strip():
+        lines.append(f"- Client: {client_name.strip()}")
+    kbforge_version = data.get("kbforge_version")
+    if isinstance(kbforge_version, str) and kbforge_version.strip():
+        lines.append(f"- KBForge version: {kbforge_version.strip()}")
+    lines.append(
+        f"- Package format version: {data.get('format_version', 'unknown')}"
+    )
+    if documents is not None:
+        lines.append(f"- Documents: {documents}")
+    if chunks is not None:
+        lines.append(f"- Chunks: {chunks}")
+    if chunks_indexed is not None and chunks_indexed != chunks:
+        lines.append(f"- Indexed chunks: {chunks_indexed}")
+    lines.append(f"- Supported ranking modes: {', '.join(modes)}")
+
+    optional_paths = _included_optional_artifact_paths(manifest, file_names)
+    if optional_paths:
+        lines.extend(["", "Optional artifacts included in this archive:", ""])
+        lines.extend(f"- `{path}`" for path in optional_paths)
+
+    lines.extend(
+        [
+            "",
+            "## What is included",
+            "",
+            "- `manifest.json` - package manifest and artifact inventory.",
+            "- `build_config.json` - safe summary of the build settings.",
+            "- `build_stats.json` - build and indexing counts.",
+            "- `chunks.jsonl` - chunk text and metadata used to reconstruct results.",
+            "- `index/` - prebuilt lexical index:",
+            "  - `postings.json`",
+            "  - `doc_lengths.json`",
+            "  - `chunk_info.json`",
+            "  - `df.json`",
+            "  - `index_stats.json`",
+            "- `README.md` - this guide.",
+            "",
+            "Raw pages and files that are not listed in `manifest.json` are not part "
+            "of the package.",
+            "",
+            "## Prerequisites",
+            "",
+            "- Python 3.10 or newer.",
+            "- A working KBForge installation and its runtime dependencies. This ZIP "
+            "contains package data only; it does not bundle the `kbforge` Python "
+            "package or a standalone executable.",
+            "- The examples below assume `kbforge` is available on your `PATH`. "
+            "Activate your virtual environment first if needed.",
+            "",
+            "## Extract the archive",
+            "",
+            "```bash",
+            "unzip YOUR-ARCHIVE.zip -d kb-package",
+            "cd kb-package",
+            "```",
+            "",
+            "Replace `YOUR-ARCHIVE.zip` with the delivered archive name. On systems "
+            "without `unzip`, use the operating system archive tool. Keep the "
+            "extracted directory structure intact: `manifest.json` must remain at "
+            "the package root next to the `index/` directory.",
+            "",
+            "## Validate the package",
+            "",
+            "There is no separate validation subcommand. Loading the package through "
+            "an existing KBForge command performs validation. From the extracted "
+            "package root:",
+            "",
+            "```bash",
+            f'kbforge query "test query" --package . --mode {example_mode} --k 1',
+            "```",
+            "",
+            "This loads and checks `manifest.json`, chunks, index files, artifact "
+            "counts, and ranking modes before running the search. A broken package "
+            "exits non-zero with an error message.",
+            "",
+            "To validate from Python:",
+            "",
+            "```bash",
+            "python3 -c \"from kbforge.package import KnowledgeBase; "
+            "kb = KnowledgeBase.load('.'); print('Indexed chunks:', kb.index.N)\"",
+            "```",
+            "",
+            "## Search from the command line",
+            "",
+            "The `--package .` option loads the package from the current directory. "
+            "The `--k` option controls the number of results (default 5).",
+            "",
+        ]
+    )
+    for mode in modes:
+        label = mode_labels.get(mode, mode.upper())
+        lines.extend(
+            [
+                f"### {label}",
+                "",
+                "```bash",
+                f'kbforge query "your search terms" --package . --mode {mode} --k 5',
+                "```",
+                "",
+            ]
+        )
+
+    lines.extend(
+        [
+            "## Search with the HTTP API",
+            "",
+            "Start the local search API from the extracted package root:",
+            "",
+            "```bash",
+            "kbforge serve --package . --host 127.0.0.1 --port 8000",
+            "```",
+            "",
+            "Check service health:",
+            "",
+            "```bash",
+            "curl http://127.0.0.1:8000/health",
+            "```",
+            "",
+            "Search using `POST /search`:",
+            "",
+            "```bash",
+            "curl -X POST http://127.0.0.1:8000/search \\",
+            '  -H "Content-Type: application/json" \\',
+            f'  -d \'{{"query": "your search terms", "mode": "{example_mode}", "limit": 5}}\'',
+            "```",
+            "",
+            "The API accepts the supported ranking modes listed above and a `limit` "
+            "from 1 to 100. `GET /health` reports the package version, chunk count, "
+            "and ranking modes. If the package cannot be loaded, the API returns "
+            "HTTP 503.",
+            "",
+            "## Limitations",
+            "",
+            "- This package supports lexical retrieval only, using the ranking modes "
+            "listed above. It does not include dense or vector search.",
+            "- The index is static. The package does not crawl, rebuild, or update "
+            "the source data.",
+            "- Search quality depends on the source content and the original chunking "
+            "configuration.",
+            "- The archive does not include a Python runtime or the KBForge "
+            "application; those must be installed separately.",
+            "",
+            "## Troubleshooting",
+            "",
+            "- `kbforge: command not found`: activate the environment where KBForge "
+            "is installed, or add it to `PATH`.",
+            "- Package load errors: confirm that you are in the extracted package root "
+            "and that `manifest.json` and `index/` are present. Do not rename or move "
+            "files inside the package.",
+            "- HTTP 503 from `/health` or `/search`: start `kbforge serve` from the "
+            "extracted root, or pass an absolute path to `--package`.",
+            "- No search results: try different or broader terms, or another "
+            "supported ranking mode.",
+            "",
+        ]
+    )
+    return "\n".join(lines)
+
+
+def export_package(
+    path: str | Path,
+    archive_path: str | Path,
+    *,
+    overwrite: bool = False,
+) -> dict:
+    """Export a validated package as a portable ZIP archive.
+
+    The manifest is the archive allowlist: the package manifest itself and
+    every manifest-listed artifact are included, while unrelated files such
+    as ``pages/`` are excluded.  The archive is written atomically and is
+    never placed inside the source package.
+    """
+    manifest = _load_manifest(path)
+    package_root = manifest.root
+    destination = Path(archive_path)
+
+    package_root_abs = package_root.absolute()
+    destination_abs = destination.absolute()
+    if (
+        destination_abs == package_root_abs
+        or destination_abs.is_relative_to(package_root_abs)
+    ):
+        raise PackageError(
+            "archive destination must be outside the source package directory"
+        )
+
+    resolved_root = package_root.resolve()
+    try:
+        resolved_destination = destination.resolve()
+    except OSError as exc:
+        raise PackageError(f"could not resolve archive destination: {exc}") from exc
+    if (
+        resolved_destination == resolved_root
+        or resolved_destination.is_relative_to(resolved_root)
+    ):
+        raise PackageError(
+            "archive destination must be outside the source package directory"
+        )
+
+    if os.path.lexists(destination):
+        if destination.is_dir():
+            raise PackageError(f"archive destination is a directory: {destination}")
+        if not overwrite:
+            raise PackageError(
+                f"refusing to overwrite existing archive: {destination}; "
+                "use overwrite=True to replace it"
+            )
+
+    files = _collect_export_files(manifest)
+    kb = KnowledgeBase.from_package(manifest.path)
+    if README_FILENAME in files:
+        raise PackageError(
+            f"package already contains a manifest-listed {README_FILENAME}; "
+            "cannot add the generated client README"
+        )
+    readme = _render_package_readme(
+        manifest,
+        file_names=set(files),
+        kb=kb,
+    )
+
+    destination.parent.mkdir(parents=True, exist_ok=True)
+    try:
+        fd, tmp_name = tempfile.mkstemp(
+            prefix=f".{destination.name}.",
+            suffix=".tmp",
+            dir=destination.parent,
+        )
+        os.close(fd)
+    except OSError as exc:
+        raise PackageError(f"could not prepare archive destination: {exc}") from exc
+
+    tmp_path: Path | None = Path(tmp_name)
+    try:
+        with zipfile.ZipFile(
+            tmp_path, mode="w", compression=zipfile.ZIP_DEFLATED
+        ) as archive:
+            archive.writestr(README_FILENAME, readme)
+            for arcname in sorted(files):
+                archive.write(files[arcname], arcname=arcname)
+        os.replace(tmp_path, destination)
+        tmp_path = None
+    except Exception as exc:
+        if isinstance(exc, PackageError):
+            raise
+        raise PackageError(f"could not write archive '{destination}': {exc}") from exc
+    finally:
+        if tmp_path is not None:
+            try:
+                tmp_path.unlink()
+            except FileNotFoundError:
+                pass
+
+    return {
+        "archive_path": str(destination),
+        "archive_size": destination.stat().st_size,
+        "file_count": len(files) + 1,
+    }

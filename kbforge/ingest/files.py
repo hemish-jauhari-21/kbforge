@@ -1,15 +1,3 @@
-"""Loaders for client-uploaded files: PDF, DOCX, HTML and TXT.
-
-Each loader produces the same :class:`~kbforge.documents.Document` schema
-as the crawler, so everything downstream (clean, dedup, chunk, index)
-treats web pages and files identically.
-
-- PDF: PyMuPDF, text extracted page by page, joined with newlines.
-- DOCX: python-docx, paragraph text (headings are paragraphs too).
-- HTML: BeautifulSoup visible text, title from the <title> tag.
-- TXT: read as UTF-8 (invalid bytes replaced).
-"""
-
 from __future__ import annotations
 
 import logging

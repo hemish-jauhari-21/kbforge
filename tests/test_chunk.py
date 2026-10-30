@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import pytest
+
 from kbforge.chunk import (
     chunk_document_fixed,
     chunk_document_sentence,
@@ -61,6 +63,8 @@ def test_empty_and_whitespace_only_documents():
     assert chunk_document_paragraph(doc) == []
     doc2 = make_doc("   \n\n   ")
     assert chunk_document_fixed(doc2) == []
+    assert chunk_document_sentence(doc2) == []
+    assert chunk_document_paragraph(doc2) == []
 
 
 def test_documents_shorter_than_target_size():
@@ -71,10 +75,11 @@ def test_documents_shorter_than_target_size():
 
 
 def test_very_long_paragraphs_and_sentences():
-    long_para = " ".join(["word"] * 500)
+    long_para = " ".join(["word"] * 500) + "."
     doc = make_doc(long_para)
     chunks = chunk_document_sentence(doc, size=50)
     assert len(chunks) > 1
+    assert all(len(chunk.text.split()) <= 50 for chunk in chunks)
 
 
 def test_chunk_size_and_overlap_behavior():
@@ -82,11 +87,8 @@ def test_chunk_size_and_overlap_behavior():
     doc = make_doc(text)
     chunks = chunk_document_fixed(doc, size=20, overlap=5)
     assert len(chunks) >= 2
-    # Check overlap - second chunk should start overlapping
-    words1 = chunks[0].text.split()
-    words2 = chunks[1].text.split()
-    # With overlap 5, they should share some words
-    assert len(set(words1) & set(words2)) >= 0  # at least structure is correct
+    assert all(len(chunk.text.split()) <= 20 for chunk in chunks)
+    assert chunks[0].text.split()[-5:] == chunks[1].text.split()[:5]
 
 
 def test_heading_and_paragraph_boundary_preservation():
@@ -113,6 +115,72 @@ def test_stable_chunk_ids_and_deterministic_output():
     chunks2 = chunk_document_fixed(doc, size=5, overlap=1)
     assert [c.chunk_id for c in chunks1] == [c.chunk_id for c in chunks2]
     assert [c.text for c in chunks1] == [c.text for c in chunks2]
+
+
+@pytest.mark.parametrize("strategy", ["fixed", "sentence", "paragraph"])
+def test_offsets_and_metadata_match_all_strategies(strategy):
+    text = (
+        "Alpha beta gamma.\n\n"
+        "Delta epsilon zeta eta theta iota kappa lambda mu nu xi omicron pi rho "
+        "sigma tau.\n\n"
+        "Upsilon phi chi psi omega."
+    )
+    doc = make_doc(text)
+    chunks = chunk_documents([doc], strategy=strategy, size=6, overlap=2)
+
+    assert chunks
+    for chunk in chunks:
+        assert 0 <= chunk.start_char < chunk.end_char <= len(text)
+        assert text[chunk.start_char : chunk.end_char] == chunk.text
+        assert len(chunk.text.split()) <= 6
+        assert chunk.metadata["depth"] == 1
+        assert chunk.metadata["chunking_strategy"] == strategy
+
+
+def test_paragraph_chunks_keep_whole_paragraphs_when_they_fit():
+    first_paragraph = "one two three four five"
+    second_paragraph = "six seven eight nine ten"
+    text = first_paragraph + "\n\n" + second_paragraph
+    doc = make_doc(text)
+
+    chunks = chunk_document_paragraph(doc, size=12)
+
+    assert len(chunks) == 1
+    assert chunks[0].text == text
+    assert text[chunks[0].start_char : chunks[0].end_char] == chunks[0].text
+
+
+def test_oversized_paragraph_is_split_without_exceeding_size():
+    first_paragraph = "Short paragraph stays together."
+    oversized_paragraph = " ".join(f"word{i}" for i in range(35)) + "."
+    text = first_paragraph + "\n\n" + oversized_paragraph
+    doc = make_doc(text)
+
+    chunks = chunk_document_paragraph(doc, size=10)
+
+    assert chunks[0].text == first_paragraph
+    assert len(chunks) > 1
+    assert all(len(chunk.text.split()) <= 10 for chunk in chunks)
+    assert all(chunk.strategy == "paragraph" for chunk in chunks)
+    assert sum(len(chunk.text.split()) for chunk in chunks) == len(text.split())
+
+
+def test_oversized_paragraph_prefers_sentence_boundaries():
+    sentences = [
+        "First sentence has six words now.",
+        "Second sentence also has six words.",
+        "Third sentence finishes the paragraph.",
+    ]
+    text = " ".join(sentences)
+    doc = make_doc(text)
+
+    chunks = chunk_document_paragraph(doc, size=12)
+
+    assert [chunk.text for chunk in chunks] == [
+        f"{sentences[0]} {sentences[1]}",
+        sentences[2],
+    ]
+    assert all(len(chunk.text.split()) <= 12 for chunk in chunks)
 
 
 def test_configuration_validation():

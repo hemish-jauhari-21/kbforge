@@ -1,11 +1,3 @@
-"""Configuration loading and validation for kbforge.
-
-The configuration lives in a single YAML file (see ``config.yaml`` for a
-commented example). Loading is strict: unknown chunking strategies,
-non-HTTP seed URLs, negative limits etc. raise :class:`ConfigError`
-immediately so the client sees the problem before a crawl starts.
-"""
-
 from __future__ import annotations
 
 import math
@@ -16,6 +8,7 @@ from urllib.parse import urlparse
 import yaml
 
 VALID_CHUNKING_STRATEGIES = ("fixed", "sentence", "paragraph")
+VALID_RANKING_MODES = ("bm25", "tfidf")
 
 
 class ConfigError(ValueError):
@@ -44,6 +37,7 @@ class CrawlConfig:
     timeout_seconds: float = 15.0
     retries: int = 3
     user_agent: str = "kbforge/0.1 (academic IR project; polite crawler)"
+    include_subdomains: bool = True
 
 
 @dataclass(frozen=True)
@@ -56,8 +50,9 @@ class ChunkingConfig:
 @dataclass(frozen=True)
 class IndexConfig:
     bm25: bool = True
-    dense: bool = True
+    dense: bool = False
     embedding_model: str = "sentence-transformers/all-MiniLM-L6-v2"
+    ranking_modes: tuple[str, ...] = VALID_RANKING_MODES
 
 
 @dataclass(frozen=True)
@@ -189,6 +184,9 @@ def _parse_crawl(raw: dict) -> CrawlConfig:
     user_agent = raw.get("user_agent", "kbforge/0.1 (academic IR project; polite crawler)")
     if not isinstance(user_agent, str) or not user_agent.strip():
         raise ConfigError("'crawl.user_agent' must be a non-empty string")
+    include_subdomains = raw.get("include_subdomains", True)
+    if not isinstance(include_subdomains, bool):
+        raise ConfigError("'crawl.include_subdomains' must be a boolean")
     return CrawlConfig(
         max_depth=max_depth,
         max_pages=max_pages,
@@ -196,6 +194,7 @@ def _parse_crawl(raw: dict) -> CrawlConfig:
         timeout_seconds=timeout,
         retries=retries,
         user_agent=user_agent.strip(),
+        include_subdomains=include_subdomains,
     )
 
 
@@ -214,13 +213,36 @@ def _parse_chunking(raw: dict) -> ChunkingConfig:
 
 def _parse_index(raw: dict) -> IndexConfig:
     bm25 = raw.get("bm25", True)
-    dense = raw.get("dense", True)
+    dense = raw.get("dense", False)
     if not isinstance(bm25, bool) or not isinstance(dense, bool):
         raise ConfigError("'index.bm25' and 'index.dense' must be booleans")
+    if dense:
+        raise ConfigError(
+            "'index.dense' is not supported; only lexical BM25/TF-IDF retrieval is implemented"
+        )
     model = raw.get("embedding_model", "sentence-transformers/all-MiniLM-L6-v2")
     if not isinstance(model, str) or not model.strip():
         raise ConfigError("'index.embedding_model' must be a non-empty string")
-    return IndexConfig(bm25=bm25, dense=dense, embedding_model=model.strip())
+    raw_modes = raw.get("ranking_modes", list(VALID_RANKING_MODES))
+    if not isinstance(raw_modes, list):
+        raise ConfigError("'index.ranking_modes' must be a list")
+    ranking_modes: list[str] = []
+    for mode in raw_modes:
+        if not isinstance(mode, str) or mode not in VALID_RANKING_MODES:
+            raise ConfigError(
+                "'index.ranking_modes' must contain only "
+                f"{VALID_RANKING_MODES}, got {mode!r}"
+            )
+        if mode not in ranking_modes:
+            ranking_modes.append(mode)
+    if not ranking_modes:
+        raise ConfigError("'index.ranking_modes' must not be empty")
+    return IndexConfig(
+        bm25=bm25,
+        dense=dense,
+        embedding_model=model.strip(),
+        ranking_modes=tuple(ranking_modes),
+    )
 
 
 def _parse_cleaning(raw: dict) -> CleaningConfig:

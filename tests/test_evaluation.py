@@ -248,6 +248,16 @@ def test_evaluate_document_level_both_modes(sample_kb):
             assert len(row["retrieved_ids"]) == len(set(row["retrieved_ids"]))
             assert row["retrieved_ids"][0].startswith("web-")
     assert report["comparison"]["bm25_minus_tfidf"]["map"] == pytest.approx(0.0)
+    assert report["diagnostics"] == {
+        "queries_without_relevant_ids": [],
+        "queries_without_results": {"bm25": [], "tfidf": []},
+    }
+    assert [row["query_id"] for row in report["per_query"]["bm25"]] == [
+        row["query_id"] for row in report["per_query"]["tfidf"]
+    ]
+    notes = "\n".join(report["notes"])
+    assert "Synthetic judgments are illustrative only" in notes
+    assert "descriptive paired difference" in notes
 
 
 def test_evaluate_chunk_level_and_no_relevant_queries(sample_kb):
@@ -271,6 +281,12 @@ def test_evaluate_chunk_level_and_no_relevant_queries(sample_kb):
 
     assert report["configuration"]["modes"] == ["bm25"]
     assert "comparison" not in report
+    assert report["skipped_queries"] == []
+    assert report["diagnostics"] == {
+        "queries_without_relevant_ids": ["q-empty"],
+        "queries_without_results": {"bm25": ["q-empty"]},
+    }
+    assert any("No queries are skipped" in note for note in report["notes"])
     rows = {row["query_id"]: row for row in report["per_query"]["bm25"]}
     assert rows["q-python"]["retrieved_ids"][0] == chunk_ids["https://kb.test/python"]
     assert rows["q-python"]["precision_at_k"] == pytest.approx(1 / 3)
@@ -304,6 +320,10 @@ def test_evaluate_rejects_unknown_ids_and_bad_modes(sample_kb):
     bad_unit = _dataset("page", [QueryJudgment("q", "python", ())])
     with pytest.raises(EvaluationError, match="evaluation unit"):
         evaluate(kb, bad_unit, k=3)
+
+    empty = _dataset("document", [])
+    with pytest.raises(EvaluationError, match="no queries"):
+        evaluate(kb, empty, k=3)
 
 
 def test_write_report_is_deterministic_json(tmp_path):
@@ -370,11 +390,53 @@ def test_evaluate_cli_writes_report_without_rebuilding(
     out = capsys.readouterr().out
     assert exit_code == 0
     assert "synthetic judgments: yes" in out
+    assert "do not estimate real-world retrieval quality" in out
+    assert "not a significance test" in out
     assert "bm25" in out and "tfidf" in out
     report = json.loads(output.read_text(encoding="utf-8"))
     assert report["format"] == "kbforge-evaluation-report"
     assert report["configuration"]["modes"] == ["bm25", "tfidf"]
     assert report["per_query"]["bm25"][0]["query_id"] == "q-python"
+    assert report["diagnostics"]["queries_without_relevant_ids"] == []
+
+
+def test_evaluate_cli_marks_unspecified_judgment_provenance(
+    sample_kb, tmp_path, capsys
+):
+    config, output_dir = sample_kb
+    build_package(config)
+    kb = load_package(output_dir)
+    docs = _doc_ids(kb)
+    queries = _write_json(
+        tmp_path / "judgments.json",
+        {
+            "unit": "document",
+            "queries": [
+                {
+                    "query_id": "q-python",
+                    "query": "python",
+                    "relevant": [docs["https://kb.test/python"]],
+                }
+            ],
+        },
+    )
+
+    exit_code = main(
+        [
+            "evaluate",
+            "--package",
+            str(output_dir),
+            "--queries",
+            str(queries),
+            "--mode",
+            "bm25",
+        ]
+    )
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert "synthetic judgments: unspecified" in out
+    assert "judgment provenance is unspecified" in out
 
 
 def test_evaluate_cli_validates_inputs_and_judgments(

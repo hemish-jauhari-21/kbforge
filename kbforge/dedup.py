@@ -1,5 +1,3 @@
-"""Deduplication for kbforge Phase 2."""
-
 from __future__ import annotations
 
 import logging

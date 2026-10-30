@@ -6,8 +6,9 @@ knowledge base as plain files and queries it on their own side; no
 hosted service or paid API is involved.
 
 Built for an academic Information Retrieval course project: the inverted
-index, BM25, tf-idf and PageRank are implemented from scratch so they
-can be explained and inspected.
+index, BM25 and tf-idf are implemented from scratch so they can be
+explained and inspected. Crawls record a link graph, but no PageRank or
+other link-based ranking is implemented.
 
 ## Setup
 
@@ -33,12 +34,37 @@ kbforge evaluate --package ./output/demo \
   --queries evaluation/synthetic_document_judgments.json --k 5 --output report.json
 ```
 
+Build directly from a website with the URL workflow:
+
+```bash
+# Interactive: prompts for crawl, chunking and output options.
+kbforge build --url https://docs.example.com/guide
+
+# Non-interactive: use defaults for omitted options.
+kbforge build --url https://docs.example.com/guide --yes
+
+# Example with explicit options and overwrite permission.
+kbforge build --url https://docs.example.com/guide --yes --overwrite \
+  --max-pages 200 --max-depth 2 --no-include-subdomains \
+  --chunking-strategy fixed --chunk-size 300 --ranking-modes bm25,tfidf
+```
+
+The URL workflow uses the same ingestion-to-packaging pipeline as the YAML
+workflow. It writes the knowledge base to `output/<hostname-derived-name>/`, a generated
+configuration to `output/.kbforge-configs/`, and a client ZIP beside the
+output directory (for example `output/docs-example-com.zip`). The ZIP includes
+a generated `README.md`. Existing outputs, ZIPs and generated configs are only
+replaced with `--overwrite`.
+
 Phase 1 implements ingestion (crawler + file loaders). Phase 2 adds
 content cleaning (trafilatura-based extraction for HTML, normalization)
 and deduplication (exact hash-based and near-duplicate detection via
-word shingles + MinHash/LSH). Phase 3 adds chunking, Phase 4 the
-inverted index with BM25/TF-IDF ranking, Phase 5 packaging, saved-index
-querying and the local search API, and Phase 6 offline retrieval evaluation.
+word shingles + MinHash/LSH). Cleaning warnings describe documents that
+remain in the corpus; only unrecoverable cleaning errors are exclusions,
+and only duplicate removals remove documents. Phase 3 adds chunking,
+Phase 4 the inverted index with BM25/TF-IDF ranking, Phase 5 packaging,
+saved-index querying and the local search API, and Phase 6 offline
+retrieval evaluation.
 
 ## Configuration
 
@@ -46,17 +72,21 @@ See the commented `config.yaml`. The important knobs:
 
 - `sources.urls` / `sources.allowed_domains`: seed pages and crawl scope
 - `sources.files_dir`: directory of uploaded PDF/DOCX/HTML/TXT files
-- `crawl.*`: max_depth, max_pages, delay_seconds, timeout, retries, UA
-- `chunking.*`: strategy (fixed/sentence/paragraph), size, overlap
-- `index.*`: which indexes to build and the embedding model
+- `crawl.*`: max_depth, max_pages, delay_seconds, timeout, retries, UA,
+  and `include_subdomains` (default `true` for YAML configs)
+- `chunking.*`: strategy (fixed/sentence/paragraph), size in words, overlap
+- `index.*`: lexical index settings and `ranking_modes` (subset of
+  `bm25`/`tfidf`); dense/embedding retrieval is not implemented (`dense: true`
+  is rejected)
 - `output_dir`: where the deliverables are written
 
 ## Architecture
 
 ```
 URLs, files
-    -> ingest/       polite BFS crawler (robots.txt, delay, limits);
-                     PDF/DOCX/HTML/TXT loaders
+    -> ingest/       polite BFS crawler (robots.txt, delay, limits) that
+                     records internal/external link edges; PDF/DOCX/HTML/TXT
+                     loaders
     -> clean/        trafilatura extraction for HTML, Unicode/whitespace
                      normalization (Phase 2)
     -> dedup/        exact duplicates (normalized hashes) and near-duplicates
@@ -67,6 +97,14 @@ URLs, files
     -> (Phase 6)     evaluation metrics and experiments
     -> (Phase 7)     incremental update (ETag / Last-Modified aware)
 ```
+
+## Text processing
+
+Indexing and queries use the same deterministic text processor: NFKC
+Unicode normalization, lowercasing, punctuation removal and whitespace
+tokenization. Stop-word removal and stemming are available but disabled
+by default. Accent folding is not performed; NFKC normalization only
+composes/decomposes Unicode, so accents are preserved.
 
 ## Package layout (Phase 5)
 
@@ -81,7 +119,9 @@ output_dir/
   build_stats.json         ingestion/processing/chunk/index statistics
   documents.jsonl          raw ingestion output (optional for querying)
   documents_cleaned.jsonl  cleaned and deduplicated documents
-  removal_log.json         Phase 2 removal log
+  link_graph.json          crawl link graph (nodes/edges; not used for ranking)
+  crawl_report.json        crawl counts, failures and timings
+  removal_log.json         Phase 2 duplicate removals, cleaning warnings/exclusions
   phase2_stats.json        Phase 2 statistics
   chunks.jsonl             chunk text + metadata used to reconstruct results
   index/
@@ -100,6 +140,19 @@ are recorded as `bm25` and `tfidf`.
 `kbforge query` and the API load only these files. They never crawl,
 clean, chunk or rebuild an index. If a required artifact is missing or
 corrupt, the command/API reports a clear error instead of rebuilding.
+Package loading also checks that `chunks.jsonl` chunk IDs agree with
+`index/chunk_info.json` and `index/doc_lengths.json`, and that their
+counts agree with `index_stats.json` and the manifest statistics.
+
+## Build failure safety
+
+`kbforge build` writes `.kbforge-build-incomplete` in `output_dir` before
+the pipeline starts and removes it only after packaging succeeds. Package
+loaders reject a package while that marker is present, so a failed rebuild
+cannot be served as a current package. Previous artifacts may remain on
+disk, but there is no rollback or transactional rewrite; rerun
+`kbforge build`, or `kbforge package` after fixing artifacts, to clear the
+marker and refresh the metadata.
 
 ## Search API
 
@@ -254,6 +307,16 @@ for returning many chunks.
 The JSON report contains format/version metadata, dataset provenance,
 configuration, aggregate metrics per mode, per-query metrics and top-`k`
 retrieved IDs, plus a `bm25_minus_tfidf` comparison when both modes run.
-Comparing different chunking/cleaning configurations requires separate
-packages built with the same document IDs; automatic multi-package comparison
-is intentionally deferred beyond Phase 6.
+No query is silently skipped: queries with no relevant IDs or no retrieved
+results still score `0.0`, and the report's `diagnostics` section lists them
+by query ID (per mode for empty result lists).
+
+The CLI always prints whether judgments are synthetic as `yes`, `no` or
+`unspecified`; an undeclared `synthetic` field is not treated as human
+provenance. Report notes and CLI caveats state that metrics describe only the
+supplied judgments. Synthetic results are illustrative, not estimates of
+real-world retrieval quality, and `bm25_minus_tfidf` is a descriptive paired
+difference rather than a significance test. Comparing different
+chunking/cleaning configurations requires separate packages built with the
+same document IDs; automatic multi-package comparison is intentionally
+deferred beyond Phase 6.

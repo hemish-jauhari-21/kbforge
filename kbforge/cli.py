@@ -12,6 +12,7 @@ Commands:
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from pathlib import Path
@@ -20,81 +21,238 @@ from kbforge import __version__
 from kbforge.config import ConfigError, load_config
 
 
-def _cmd_build(args: argparse.Namespace) -> int:
-    from kbforge.ingest.crawler import run_ingest
-
-    try:
-        config = load_config(args.config)
-    except ConfigError as exc:
-        print(f"config error: {exc}", file=sys.stderr)
-        return 2
+def _run_build_pipeline(config) -> dict | None:
+    """Run Phases 1-5 with the shared pipeline and return phase summaries."""
+    from kbforge.package import mark_build_in_progress
 
     print(f"kbforge {__version__} | client: {config.client_name}")
     print(f"output dir: {config.output_dir}")
-    summary = run_ingest(config)
+    mark_build_in_progress(config.output_dir)
+
+    try:
+        from kbforge.ingest.crawler import run_ingest
+
+        ingest_summary = run_ingest(config)
+    except Exception as exc:
+        print(f"\ningestion error: {exc}", file=sys.stderr)
+        return None
 
     print("\ningestion complete")
-    print(f"  pages fetched : {summary['pages_fetched']}")
-    print(f"  pages failed  : {summary['pages_failed']}")
-    print(f"  files loaded  : {summary['files_loaded']}")
-    print(f"  files failed  : {summary['files_failed']}")
-    print(f"  documents     : {summary['documents_written']} -> {Path(config.output_dir) / 'documents.jsonl'}")
-    print(f"  link edges    : {summary['edges']} -> {Path(config.output_dir) / 'link_graph.json'}")
+    print(f"  pages fetched : {ingest_summary['pages_fetched']}")
+    print(f"  pages failed  : {ingest_summary['pages_failed']}")
+    print(f"  files loaded  : {ingest_summary['files_loaded']}")
+    print(f"  files failed  : {ingest_summary['files_failed']}")
+    print(
+        "  documents     : "
+        f"{ingest_summary['documents_written']} -> "
+        f"{Path(config.output_dir) / 'documents.jsonl'}"
+    )
+    print(
+        "  link edges    : "
+        f"{ingest_summary['edges']} -> "
+        f"{Path(config.output_dir) / 'link_graph.json'}"
+    )
 
-    # Phase 2: cleaning and deduplication (optional, configurable)
+    process_summary = None
     try:
-        cleaning_enabled = getattr(getattr(config, 'cleaning', None), 'enabled', True)
-        dedup_enabled = getattr(getattr(config, 'deduplication', None), 'enabled', True)
+        cleaning_enabled = getattr(getattr(config, "cleaning", None), "enabled", True)
+        dedup_enabled = getattr(
+            getattr(config, "deduplication", None), "enabled", True
+        )
         if cleaning_enabled or dedup_enabled:
             from kbforge.process import run_process
-            proc_summary = run_process(config)
+
+            process_summary = run_process(config)
             print("\nphase 2 complete")
-            print(f"  processed documents : {proc_summary['processed_documents']}")
-            print(f"  removals            : {proc_summary['removals']}")
-            print(f"  cleaned output      : {proc_summary['cleaned_path']}")
-            print(f"  removal log         : {proc_summary['removal_log_path']}")
+            print(f"  processed documents : {process_summary['processed_documents']}")
+            print(f"  duplicate removals  : {process_summary['removals']}")
+            print(f"  cleaning warnings   : {process_summary['cleaning_warnings']}")
+            print(f"  cleaning exclusions : {process_summary['cleaning_exclusions']}")
+            print(f"  cleaned output      : {process_summary['cleaned_path']}")
+            print(f"  removal log         : {process_summary['removal_log_path']}")
         else:
             print("\nphase 2 skipped (disabled in config)")
     except Exception as exc:
         print(f"\nphase 2 error: {exc}", file=sys.stderr)
-        return 0
+        return None
 
-    # Phase 3: chunking
     try:
         from kbforge.process import run_chunk
+
         chunk_summary = run_chunk(config)
         print("\nphase 3 complete")
-        print(f"  chunks written : {chunk_summary['chunks_written']} -> {chunk_summary['chunks_path']}")
+        print(
+            "  chunks written : "
+            f"{chunk_summary['chunks_written']} -> {chunk_summary['chunks_path']}"
+        )
     except Exception as exc:
         print(f"\nphase 3 error: {exc}", file=sys.stderr)
-        return 0
+        return None
 
-    # Phase 4: indexing
     try:
         from kbforge.process import run_index
-        idx_summary = run_index(config)
+
+        index_summary = run_index(config)
         print("\nphase 4 complete")
-        print(f"  chunks indexed : {idx_summary['chunks_indexed']} -> {idx_summary['index_dir']}")
+        print(
+            "  chunks indexed : "
+            f"{index_summary['chunks_indexed']} -> {index_summary['index_dir']}"
+        )
     except Exception as exc:
         print(f"\nphase 4 error: {exc}", file=sys.stderr)
-        return 0
+        return None
 
-    # Phase 5: packaging
     try:
         from kbforge.package import build_package
+
         package_summary = build_package(config)
         print("\nphase 5 complete")
         print(f"  package manifest : {package_summary['manifest_path']}")
         print(f"  ranking modes    : {', '.join(package_summary['ranking_modes'])}")
     except Exception as exc:
         print(f"\nphase 5 error: {exc}", file=sys.stderr)
-        return 0
+        return None
 
+    return {
+        "ingestion": ingest_summary,
+        "processing": process_summary,
+        "chunking": chunk_summary,
+        "index": index_summary,
+        "package": package_summary,
+    }
+
+
+def _build_document_count(summary: dict) -> int:
+    package_summary = summary["package"]
+    try:
+        stats_path = Path(package_summary["build_stats_path"])
+        stats = json.loads(stats_path.read_text(encoding="utf-8"))
+    except (KeyError, OSError, UnicodeDecodeError, json.JSONDecodeError):
+        stats = {}
+    for key in ("documents_cleaned", "documents_raw"):
+        value = stats.get(key)
+        if isinstance(value, int) and not isinstance(value, bool):
+            return value
+    return summary["ingestion"].get("documents_written", 0)
+
+
+def _cmd_build_url(args: argparse.Namespace) -> int:
+    from kbforge.package import (
+        KnowledgeBase,
+        export_package,
+        mark_build_in_progress,
+    )
+    from kbforge.url_build import (
+        UrlBuildError,
+        collect_url_build_options,
+        display_path,
+        prepare_url_build,
+    )
+
+    try:
+        collected = collect_url_build_options(
+            url=args.url,
+            max_pages=args.max_pages,
+            max_depth=args.max_depth,
+            include_subdomains=args.include_subdomains,
+            chunking_strategy=args.chunking_strategy,
+            chunk_size=args.chunk_size,
+            chunk_overlap=args.chunk_overlap,
+            ranking_modes=args.ranking_modes,
+            output=args.output,
+            yes=args.yes,
+        )
+    except UrlBuildError as exc:
+        print(f"input error: {exc}", file=sys.stderr)
+        return 2
+
+    if collected is None:
+        return 0
+    options, paths = collected
+
+    try:
+        prepare_url_build(options, paths, overwrite=args.overwrite)
+    except (OSError, UrlBuildError) as exc:
+        print(f"output error: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        config = load_config(paths.config_path)
+    except ConfigError as exc:
+        print(f"config error: {exc}", file=sys.stderr)
+        return 2
+
+    summary = _run_build_pipeline(config)
+    if summary is None:
+        return 1
+
+    try:
+        KnowledgeBase.from_package(paths.output_dir)
+    except Exception as exc:
+        mark_build_in_progress(paths.output_dir)
+        print(f"package validation error: {exc}", file=sys.stderr)
+        return 1
+
+    try:
+        archive_summary = export_package(
+            paths.output_dir,
+            paths.archive_path,
+            overwrite=args.overwrite,
+        )
+    except Exception as exc:
+        print(f"export error: {exc}", file=sys.stderr)
+        return 1
+
+    package_summary = summary["package"]
+    documents = _build_document_count(summary)
+    ranking_modes = package_summary.get(
+        "ranking_modes", list(config.index.ranking_modes)
+    )
+    print("\nBuild completed successfully.\n")
+    print(f"Website: {options.url}")
+    print(f"Documents: {documents}")
+    print(f"Chunks: {package_summary['chunks']}")
+    print(f"Chunking strategy: {config.chunking.strategy}")
+    print(f"Ranking modes: {', '.join(ranking_modes)}")
+    print(f"\nKnowledge base: {display_path(paths.output_dir)}")
+    print(f"Client ZIP: {display_path(archive_summary['archive_path'])}")
+    print("README: included in ZIP")
     return 0
 
 
+def _cmd_build(args: argparse.Namespace) -> int:
+    if args.url is not None:
+        if args.config is not None:
+            print("--url and --config cannot be used together", file=sys.stderr)
+            return 2
+        return _cmd_build_url(args)
+
+    url_only = (
+        args.max_pages,
+        args.max_depth,
+        args.include_subdomains,
+        args.chunking_strategy,
+        args.chunk_size,
+        args.chunk_overlap,
+        args.ranking_modes,
+        args.output,
+    )
+    if any(value is not None for value in url_only) or args.yes or args.overwrite:
+        print("URL build options require --url", file=sys.stderr)
+        return 2
+
+    try:
+        config = load_config(args.config or "config.yaml")
+    except ConfigError as exc:
+        print(f"config error: {exc}", file=sys.stderr)
+        return 2
+
+    summary = _run_build_pipeline(config)
+    return 0 if summary is not None else 1
+
+
 def _cmd_package(args: argparse.Namespace) -> int:
-    from kbforge.package import build_package
+    from kbforge.package import build_package, export_package
 
     try:
         config = load_config(args.config)
@@ -113,13 +271,29 @@ def _cmd_package(args: argparse.Namespace) -> int:
     print(f"build stats      : {summary['build_stats_path']}")
     print(f"chunks           : {summary['chunks']}")
     print(f"ranking modes    : {', '.join(summary['ranking_modes'])}")
+
+    if args.archive:
+        try:
+            archive_summary = export_package(
+                summary["package_dir"],
+                args.archive,
+                overwrite=args.overwrite,
+            )
+        except Exception as exc:
+            print(f"export error: {exc}", file=sys.stderr)
+            return 1
+
+        print(f"archive path     : {archive_summary['archive_path']}")
+        print(f"archive size     : {archive_summary['archive_size']} bytes")
+        print(f"archive files    : {archive_summary['file_count']}")
+
     return 0
 
 
 def _cmd_query(args: argparse.Namespace) -> int:
     from kbforge.package import KnowledgeBase, SUPPORTED_RANKING_MODES
 
-    if args.mode not in SUPPORTED_RANKING_MODES:
+    if args.mode is not None and args.mode not in SUPPORTED_RANKING_MODES:
         print(
             f"invalid ranking mode: {args.mode!r} "
             f"(choose from {', '.join(SUPPORTED_RANKING_MODES)})",
@@ -151,7 +325,19 @@ def _cmd_query(args: argparse.Namespace) -> int:
             print("run 'kbforge build' first", file=sys.stderr)
         return 1
 
-    results = kb.search(args.text, mode=args.mode, limit=args.k)
+    if args.mode is None:
+        mode = "bm25" if "bm25" in kb.supported_modes else kb.supported_modes[0]
+    else:
+        mode = args.mode
+    if mode not in kb.supported_modes:
+        print(
+            f"ranking mode {mode!r} is not available in this package "
+            f"(available: {', '.join(kb.supported_modes)})",
+            file=sys.stderr,
+        )
+        return 2
+
+    results = kb.search(args.text, mode=mode, limit=args.k)
     if not results:
         print("no results")
         return 0
@@ -205,7 +391,19 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
             print("run 'kbforge build' first", file=sys.stderr)
         return 1
 
-    modes = list(SUPPORTED_RANKING_MODES) if args.mode == "both" else [args.mode]
+    if args.mode == "both":
+        modes = [
+            mode for mode in SUPPORTED_RANKING_MODES if mode in kb.supported_modes
+        ]
+    else:
+        modes = [args.mode]
+        if args.mode not in kb.supported_modes:
+            print(
+                f"ranking mode {args.mode!r} is not available in this package "
+                f"(available: {', '.join(kb.supported_modes)})",
+                file=sys.stderr,
+            )
+            return 2
     try:
         report = evaluate(kb, dataset, k=args.k, modes=modes)
     except EvaluationError as exc:
@@ -216,8 +414,22 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
         f"evaluation: {dataset.name} | queries: {len(dataset.queries)} | "
         f"unit: {dataset.unit} | k: {args.k}"
     )
-    if dataset.synthetic is not None:
-        print(f"synthetic judgments: {'yes' if dataset.synthetic else 'no'}")
+    synthetic_label = (
+        "unspecified"
+        if dataset.synthetic is None
+        else ("yes" if dataset.synthetic else "no")
+    )
+    print(f"synthetic judgments: {synthetic_label}")
+    if dataset.synthetic is True:
+        print(
+            "caveat: synthetic judgments are illustrative; results do not "
+            "estimate real-world retrieval quality."
+        )
+    elif dataset.synthetic is None:
+        print(
+            "caveat: judgment provenance is unspecified; results describe "
+            "only this dataset."
+        )
     for mode in report["configuration"]["modes"]:
         metrics = report["aggregate"][mode]
         print(
@@ -238,6 +450,24 @@ def _cmd_evaluate(args: argparse.Namespace) -> int:
             f"nDCG@{args.k}={comparison['ndcg_at_k']:+.4f} "
             f"MAP={comparison['map']:+.4f}"
         )
+        print(
+            "caveat: bm25 - tfidf is a descriptive paired difference on the "
+            "same judgments, not a significance test."
+        )
+
+    diagnostics = report["diagnostics"]
+    if diagnostics["queries_without_relevant_ids"]:
+        print(
+            "warning: no relevant judgments for: "
+            + ", ".join(diagnostics["queries_without_relevant_ids"])
+        )
+    for mode in report["configuration"]["modes"]:
+        without_results = diagnostics["queries_without_results"][mode]
+        if without_results:
+            print(
+                f"warning: {mode} returned no results for: "
+                + ", ".join(without_results)
+            )
 
     if args.output:
         try:
@@ -284,8 +514,74 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument("-v", "--verbose", action="store_true", help="debug logging")
     sub = parser.add_subparsers(dest="command", required=True)
 
-    p_build = sub.add_parser("build", help="run the pipeline and package the result")
-    p_build.add_argument("--config", default="config.yaml", help="path to client config YAML")
+    p_build = sub.add_parser(
+        "build",
+        help="build a knowledge base from YAML or a website URL",
+        description=(
+            "Run the existing ingestion, cleaning, chunking, indexing and "
+            "packaging pipeline. Use --config for the YAML workflow or --url "
+            "for the interactive website workflow."
+        ),
+    )
+    p_build.add_argument(
+        "--config",
+        default=None,
+        help="path to client config YAML (default: config.yaml)",
+    )
+    p_build.add_argument(
+        "--url",
+        help="website URL to build from; prompts for omitted options",
+    )
+    p_build.add_argument(
+        "--max-pages",
+        type=int,
+        help="maximum page-fetch attempts (URL workflow; default: 300)",
+    )
+    p_build.add_argument(
+        "--max-depth",
+        type=int,
+        help="maximum crawl depth (URL workflow; default: 2)",
+    )
+    p_build.add_argument(
+        "--include-subdomains",
+        action=argparse.BooleanOptionalAction,
+        default=None,
+        help="allow links to subdomains (URL workflow; default: no)",
+    )
+    p_build.add_argument(
+        "--chunking-strategy",
+        choices=("fixed", "sentence", "paragraph"),
+        help="chunking strategy (URL workflow; default: fixed)",
+    )
+    p_build.add_argument(
+        "--chunk-size",
+        type=int,
+        help="maximum words per chunk (URL workflow; default: 300)",
+    )
+    p_build.add_argument(
+        "--chunk-overlap",
+        type=int,
+        help="fixed-size chunk overlap in words (URL workflow; default: 50)",
+    )
+    p_build.add_argument(
+        "--ranking-modes",
+        help="comma-separated ranking modes (URL workflow; default: bm25,tfidf)",
+    )
+    p_build.add_argument(
+        "--output",
+        help="output directory inside output/ (URL workflow; default: generated)",
+    )
+    p_build.add_argument(
+        "-y",
+        "--yes",
+        action="store_true",
+        help="non-interactive URL build; do not prompt for confirmation",
+    )
+    p_build.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace an existing URL-workflow output, generated config and ZIP",
+    )
     p_build.set_defaults(func=_cmd_build)
 
     p_query = sub.add_parser(
@@ -299,7 +595,10 @@ def build_parser() -> argparse.ArgumentParser:
     )
     p_query.add_argument("text", help="query text")
     p_query.add_argument(
-        "--mode", default="bm25", choices=["bm25", "tfidf"], help="ranking mode"
+        "--mode",
+        default=None,
+        choices=["bm25", "tfidf"],
+        help="ranking mode (default: first packaged mode, preferring bm25)",
     )
     p_query.add_argument("--k", type=int, default=5, help="maximum results (default: 5)")
     p_query.add_argument(
@@ -314,6 +613,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="create/refresh the package manifest for an already-built knowledge base",
     )
     p_package.add_argument("--config", default="config.yaml", help="client config YAML")
+    p_package.add_argument(
+        "--archive",
+        metavar="PATH",
+        help="export the validated package as a ZIP archive at PATH",
+    )
+    p_package.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="replace an existing archive created with --archive",
+    )
     p_package.set_defaults(func=_cmd_package)
 
     p_serve = sub.add_parser(

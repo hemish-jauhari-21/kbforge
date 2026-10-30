@@ -1,8 +1,3 @@
-"""Lexical text processing for indexing and retrieval.
-
-Deterministic tokenization/normalization for documents and queries.
-"""
-
 from __future__ import annotations
 
 import re

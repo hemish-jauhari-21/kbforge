@@ -1,33 +1,33 @@
 {
   "aggregate": {
     "bm25": {
-      "map": 0.7470903228715728,
+      "map": 0.7601359577922078,
       "mrr": 0.875,
-      "ndcg_at_k": 0.75,
-      "precision_at_k": 0.6875,
+      "ndcg_at_k": 0.7467456147813635,
+      "precision_at_k": 0.4,
       "query_count": 8,
-      "recall_at_k": 0.5625
+      "recall_at_k": 0.75
     },
     "tfidf": {
-      "map": 0.7731646825396825,
+      "map": 0.7810763888888889,
       "mrr": 0.9375,
-      "ndcg_at_k": 0.7782867981913646,
-      "precision_at_k": 0.6875,
+      "ndcg_at_k": 0.8221997771104732,
+      "precision_at_k": 0.475,
       "query_count": 8,
-      "recall_at_k": 0.53125
+      "recall_at_k": 0.8541666666666666
     }
   },
   "comparison": {
     "bm25_minus_tfidf": {
-      "map": -0.02607435966810967,
+      "map": -0.02094043109668109,
       "mrr": -0.0625,
-      "ndcg_at_k": -0.028286798191364593,
-      "precision_at_k": 0.0,
-      "recall_at_k": 0.03125
+      "ndcg_at_k": -0.07545416232910973,
+      "precision_at_k": -0.07499999999999996,
+      "recall_at_k": -0.10416666666666663
     }
   },
   "configuration": {
-    "k": 2,
+    "k": 5,
     "modes": [
       "bm25",
       "tfidf"
@@ -39,8 +39,15 @@
     "format_version": "1.0",
     "name": "manual-test synthetic document judgments",
     "query_count": 8,
-    "source_file": "synthetic_document_judgments.json",
+    "source_file": "manual-test-judgments.json",
     "synthetic": true
+  },
+  "diagnostics": {
+    "queries_without_relevant_ids": [],
+    "queries_without_results": {
+      "bm25": [],
+      "tfidf": []
+    }
   },
   "format": "kbforge-evaluation-report",
   "format_version": "1.0",
@@ -53,36 +60,44 @@
     "Duplicate retrieved IDs are ignored after their first occurrence.",
     "P@k, R@k and nDCG use cutoff k; AP/MAP and MRR use the full ranking.",
     "Queries with no relevant IDs or no retrieved results score 0.0.",
-    "AP/MAP use the full ranked list; missing relevant IDs reduce the score."
+    "AP/MAP use the full ranked list; missing relevant IDs reduce the score.",
+    "No queries are skipped; every query is evaluated for every selected mode.",
+    "These metrics describe only the supplied judgments, not real-world quality.",
+    "Synthetic judgments are illustrative only; do not present these metrics as real-world quality estimates.",
+    "bm25_minus_tfidf is a descriptive paired difference on the same queries and judgments, not a significance test."
   ],
   "per_query": {
     "bm25": [
       {
-        "average_precision": 0.9166666666666666,
-        "k": 2,
+        "average_precision": 1.0,
+        "k": 5,
         "ndcg_at_k": 1.0,
-        "precision_at_k": 1.0,
+        "precision_at_k": 0.6,
         "query": "download python for windows",
         "query_id": "q-download-windows",
-        "recall_at_k": 0.6666666666666666,
+        "recall_at_k": 1.0,
         "reciprocal_rank": 1.0,
         "relevant_count": 3,
         "relevant_retrieved_ids": [
           "web-7a0ceb114496",
-          "web-8d89c864a5c2"
+          "web-58b1f3b2155f",
+          "web-67632c9b4c0a"
         ],
         "retrieved_count": 49,
         "retrieved_ids": [
           "web-7a0ceb114496",
-          "web-8d89c864a5c2"
+          "web-58b1f3b2155f",
+          "web-67632c9b4c0a",
+          "web-e3ad82ea072e",
+          "web-60cb6994e60b"
         ],
         "unit": "document"
       },
       {
-        "average_precision": 0.3611111111111111,
-        "k": 2,
-        "ndcg_at_k": 0.38685280723454163,
-        "precision_at_k": 0.5,
+        "average_precision": 0.38690476190476186,
+        "k": 5,
+        "ndcg_at_k": 0.2960819109658652,
+        "precision_at_k": 0.2,
         "query": "official python documentation and beginner tutorials",
         "query_id": "q-documentation",
         "recall_at_k": 0.3333333333333333,
@@ -94,75 +109,90 @@
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-1d0d6ae11535",
-          "web-a18cf7050f39"
+          "web-a18cf7050f39",
+          "web-2f8b36236fb5",
+          "web-07305af2ed55",
+          "web-274e33d21525"
         ],
         "unit": "document"
       },
       {
         "average_precision": 0.5595238095238095,
-        "k": 2,
-        "ndcg_at_k": 0.38685280723454163,
-        "precision_at_k": 0.5,
+        "k": 5,
+        "ndcg_at_k": 0.44149241373678083,
+        "precision_at_k": 0.4,
         "query": "python community mailing lists forums and irc",
         "query_id": "q-community",
-        "recall_at_k": 0.25,
+        "recall_at_k": 0.5,
         "reciprocal_rank": 0.5,
         "relevant_count": 4,
         "relevant_retrieved_ids": [
-          "web-8d94181c4cb9"
+          "web-8d94181c4cb9",
+          "web-edd88fc4cae2"
         ],
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-2f8b36236fb5",
-          "web-8d94181c4cb9"
+          "web-8d94181c4cb9",
+          "web-edd88fc4cae2",
+          "web-9a19ff498ddf",
+          "web-df9e8b51e30f"
         ],
         "unit": "document"
       },
       {
-        "average_precision": 0.581845238095238,
-        "k": 2,
-        "ndcg_at_k": 0.6131471927654584,
-        "precision_at_k": 0.5,
+        "average_precision": 0.5770833333333333,
+        "k": 5,
+        "ndcg_at_k": 0.5855700749881525,
+        "precision_at_k": 0.4,
         "query": "python events conferences workshops calendars",
         "query_id": "q-events",
-        "recall_at_k": 0.25,
+        "recall_at_k": 0.5,
         "reciprocal_rank": 1.0,
         "relevant_count": 4,
         "relevant_retrieved_ids": [
-          "web-ab2f5b8d0b63"
+          "web-ab2f5b8d0b63",
+          "web-a5357a81fafe"
         ],
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-ab2f5b8d0b63",
-          "web-2f8b36236fb5"
+          "web-2f8b36236fb5",
+          "web-a5357a81fafe",
+          "web-5f617c638c0b",
+          "web-70db3c1783b5"
         ],
         "unit": "document"
       },
       {
         "average_precision": 0.5575757575757575,
-        "k": 2,
-        "ndcg_at_k": 0.6131471927654584,
-        "precision_at_k": 0.5,
+        "k": 5,
+        "ndcg_at_k": 0.6508205185601091,
+        "precision_at_k": 0.4,
         "query": "python success stories business",
         "query_id": "q-success-stories",
-        "recall_at_k": 0.3333333333333333,
+        "recall_at_k": 0.6666666666666666,
         "reciprocal_rank": 1.0,
         "relevant_count": 3,
         "relevant_retrieved_ids": [
-          "web-60cb6994e60b"
+          "web-60cb6994e60b",
+          "web-34fa41dce805"
         ],
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-60cb6994e60b",
-          "web-83a981a92db2"
+          "web-1ab11d99cba1",
+          "web-83a981a92db2",
+          "web-07305af2ed55",
+          "web-34fa41dce805"
         ],
         "unit": "document"
       },
       {
         "average_precision": 1.0,
-        "k": 2,
+        "k": 5,
         "ndcg_at_k": 1.0,
-        "precision_at_k": 1.0,
+        "precision_at_k": 0.4,
         "query": "python software foundation annual impact report",
         "query_id": "q-psf-report",
         "recall_at_k": 1.0,
@@ -175,36 +205,43 @@
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-7005d0672eb2",
-          "web-8fb3d36076e0"
+          "web-8fb3d36076e0",
+          "web-b19869403126",
+          "web-07305af2ed55",
+          "web-2f8b36236fb5"
         ],
         "unit": "document"
       },
       {
         "average_precision": 1.0,
-        "k": 2,
+        "k": 5,
         "ndcg_at_k": 1.0,
-        "precision_at_k": 1.0,
+        "precision_at_k": 0.6,
         "query": "about python applications and quotes",
         "query_id": "q-about-applications",
-        "recall_at_k": 0.6666666666666666,
+        "recall_at_k": 1.0,
         "reciprocal_rank": 1.0,
         "relevant_count": 3,
         "relevant_retrieved_ids": [
           "web-3e873a95818b",
-          "web-948ef18d655b"
+          "web-948ef18d655b",
+          "web-2f8b36236fb5"
         ],
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-3e873a95818b",
-          "web-948ef18d655b"
+          "web-948ef18d655b",
+          "web-2f8b36236fb5",
+          "web-60cb6994e60b",
+          "web-70db3c1783b5"
         ],
         "unit": "document"
       },
       {
         "average_precision": 1.0,
-        "k": 2,
+        "k": 5,
         "ndcg_at_k": 1.0,
-        "precision_at_k": 0.5,
+        "precision_at_k": 0.2,
         "query": "client onboarding support contact api keys notes",
         "query_id": "q-support-notes",
         "recall_at_k": 1.0,
@@ -216,160 +253,192 @@
         "retrieved_count": 21,
         "retrieved_ids": [
           "file-60d9f7d3e038",
-          "web-8d89c864a5c2"
+          "web-67632c9b4c0a",
+          "web-9a19ff498ddf",
+          "web-a18cf7050f39",
+          "web-a02a4c052002"
         ],
         "unit": "document"
       }
     ],
     "tfidf": [
       {
-        "average_precision": 0.8666666666666667,
-        "k": 2,
-        "ndcg_at_k": 1.0,
-        "precision_at_k": 1.0,
+        "average_precision": 0.9166666666666666,
+        "k": 5,
+        "ndcg_at_k": 0.9674679834891693,
+        "precision_at_k": 0.6,
         "query": "download python for windows",
         "query_id": "q-download-windows",
-        "recall_at_k": 0.6666666666666666,
+        "recall_at_k": 1.0,
         "reciprocal_rank": 1.0,
         "relevant_count": 3,
         "relevant_retrieved_ids": [
           "web-7a0ceb114496",
-          "web-8d89c864a5c2"
+          "web-58b1f3b2155f",
+          "web-67632c9b4c0a"
         ],
         "retrieved_count": 49,
         "retrieved_ids": [
           "web-7a0ceb114496",
-          "web-8d89c864a5c2"
+          "web-58b1f3b2155f",
+          "web-bffabe2ac207",
+          "web-67632c9b4c0a",
+          "file-60d9f7d3e038"
         ],
         "unit": "document"
       },
       {
-        "average_precision": 0.4583333333333333,
-        "k": 2,
-        "ndcg_at_k": 0.38685280723454163,
-        "precision_at_k": 0.5,
+        "average_precision": 0.4444444444444444,
+        "k": 5,
+        "ndcg_at_k": 0.49818925746641285,
+        "precision_at_k": 0.4,
         "query": "official python documentation and beginner tutorials",
         "query_id": "q-documentation",
-        "recall_at_k": 0.3333333333333333,
+        "recall_at_k": 0.6666666666666666,
         "reciprocal_rank": 0.5,
         "relevant_count": 3,
         "relevant_retrieved_ids": [
-          "web-a18cf7050f39"
+          "web-a18cf7050f39",
+          "web-70db3c1783b5"
         ],
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-1d0d6ae11535",
-          "web-a18cf7050f39"
+          "web-a18cf7050f39",
+          "web-2f8b36236fb5",
+          "web-70db3c1783b5",
+          "web-07305af2ed55"
         ],
         "unit": "document"
       },
       {
-        "average_precision": 0.7333333333333333,
-        "k": 2,
-        "ndcg_at_k": 0.6131471927654584,
-        "precision_at_k": 0.5,
+        "average_precision": 0.7708333333333333,
+        "k": 5,
+        "ndcg_at_k": 0.75369761125927,
+        "precision_at_k": 0.6,
         "query": "python community mailing lists forums and irc",
         "query_id": "q-community",
-        "recall_at_k": 0.25,
+        "recall_at_k": 0.75,
         "reciprocal_rank": 1.0,
         "relevant_count": 4,
         "relevant_retrieved_ids": [
-          "web-edd88fc4cae2"
+          "web-edd88fc4cae2",
+          "web-8d94181c4cb9",
+          "web-929c179b10ef"
         ],
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-edd88fc4cae2",
-          "web-2f8b36236fb5"
+          "web-2f8b36236fb5",
+          "web-8d94181c4cb9",
+          "web-929c179b10ef",
+          "web-9a19ff498ddf"
         ],
         "unit": "document"
       },
       {
-        "average_precision": 0.7214285714285714,
-        "k": 2,
-        "ndcg_at_k": 1.0,
-        "precision_at_k": 1.0,
+        "average_precision": 0.7166666666666667,
+        "k": 5,
+        "ndcg_at_k": 0.787702056960637,
+        "precision_at_k": 0.6,
         "query": "python events conferences workshops calendars",
         "query_id": "q-events",
-        "recall_at_k": 0.5,
+        "recall_at_k": 0.75,
         "reciprocal_rank": 1.0,
         "relevant_count": 4,
         "relevant_retrieved_ids": [
           "web-ab2f5b8d0b63",
-          "web-a5357a81fafe"
+          "web-a5357a81fafe",
+          "web-83a42195890f"
         ],
         "retrieved_count": 48,
         "retrieved_ids": [
           "web-ab2f5b8d0b63",
-          "web-a5357a81fafe"
+          "web-a5357a81fafe",
+          "web-2f8b36236fb5",
+          "web-5f617c638c0b",
+          "web-83a42195890f"
         ],
         "unit": "document"
       },
       {
-        "average_precision": 0.6555555555555556,
-        "k": 2,
-        "ndcg_at_k": 0.6131471927654584,
-        "precision_at_k": 0.5,
+        "average_precision": 0.5666666666666667,
+        "k": 5,
+        "ndcg_at_k": 0.6508205185601091,
+        "precision_at_k": 0.4,
         "query": "python success stories business",
         "query_id": "q-success-stories",
-        "recall_at_k": 0.3333333333333333,
-        "reciprocal_rank": 1.0,
-        "relevant_count": 3,
-        "relevant_retrieved_ids": [
-          "web-60cb6994e60b"
-        ],
-        "retrieved_count": 48,
-        "retrieved_ids": [
-          "web-60cb6994e60b",
-          "web-1ab11d99cba1"
-        ],
-        "unit": "document"
-      },
-      {
-        "average_precision": 0.75,
-        "k": 2,
-        "ndcg_at_k": 0.6131471927654584,
-        "precision_at_k": 0.5,
-        "query": "python software foundation annual impact report",
-        "query_id": "q-psf-report",
-        "recall_at_k": 0.5,
-        "reciprocal_rank": 1.0,
-        "relevant_count": 2,
-        "relevant_retrieved_ids": [
-          "web-7005d0672eb2"
-        ],
-        "retrieved_count": 48,
-        "retrieved_ids": [
-          "web-7005d0672eb2",
-          "web-2f8b36236fb5"
-        ],
-        "unit": "document"
-      },
-      {
-        "average_precision": 1.0,
-        "k": 2,
-        "ndcg_at_k": 1.0,
-        "precision_at_k": 1.0,
-        "query": "about python applications and quotes",
-        "query_id": "q-about-applications",
         "recall_at_k": 0.6666666666666666,
         "reciprocal_rank": 1.0,
         "relevant_count": 3,
         "relevant_retrieved_ids": [
-          "web-3e873a95818b",
-          "web-948ef18d655b"
+          "web-60cb6994e60b",
+          "web-34fa41dce805"
         ],
         "retrieved_count": 48,
         "retrieved_ids": [
-          "web-3e873a95818b",
-          "web-948ef18d655b"
+          "web-60cb6994e60b",
+          "web-1ab11d99cba1",
+          "web-07305af2ed55",
+          "web-83a981a92db2",
+          "web-34fa41dce805"
+        ],
+        "unit": "document"
+      },
+      {
+        "average_precision": 0.8333333333333333,
+        "k": 5,
+        "ndcg_at_k": 0.9197207891481876,
+        "precision_at_k": 0.4,
+        "query": "python software foundation annual impact report",
+        "query_id": "q-psf-report",
+        "recall_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "relevant_count": 2,
+        "relevant_retrieved_ids": [
+          "web-7005d0672eb2",
+          "web-8fb3d36076e0"
+        ],
+        "retrieved_count": 48,
+        "retrieved_ids": [
+          "web-7005d0672eb2",
+          "web-b19869403126",
+          "web-8fb3d36076e0",
+          "web-2f8b36236fb5",
+          "web-07305af2ed55"
         ],
         "unit": "document"
       },
       {
         "average_precision": 1.0,
-        "k": 2,
+        "k": 5,
         "ndcg_at_k": 1.0,
-        "precision_at_k": 0.5,
+        "precision_at_k": 0.6,
+        "query": "about python applications and quotes",
+        "query_id": "q-about-applications",
+        "recall_at_k": 1.0,
+        "reciprocal_rank": 1.0,
+        "relevant_count": 3,
+        "relevant_retrieved_ids": [
+          "web-3e873a95818b",
+          "web-948ef18d655b",
+          "web-2f8b36236fb5"
+        ],
+        "retrieved_count": 48,
+        "retrieved_ids": [
+          "web-3e873a95818b",
+          "web-948ef18d655b",
+          "web-2f8b36236fb5",
+          "web-60cb6994e60b",
+          "web-a2e967bf3539"
+        ],
+        "unit": "document"
+      },
+      {
+        "average_precision": 1.0,
+        "k": 5,
+        "ndcg_at_k": 1.0,
+        "precision_at_k": 0.2,
         "query": "client onboarding support contact api keys notes",
         "query_id": "q-support-notes",
         "recall_at_k": 1.0,
@@ -381,7 +450,10 @@
         "retrieved_count": 21,
         "retrieved_ids": [
           "file-60d9f7d3e038",
-          "web-67632c9b4c0a"
+          "web-67632c9b4c0a",
+          "web-1d0d6ae11535",
+          "web-58b1f3b2155f",
+          "web-a18cf7050f39"
         ],
         "unit": "document"
       }

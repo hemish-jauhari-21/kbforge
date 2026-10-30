@@ -3,11 +3,12 @@
 from __future__ import annotations
 
 import json
+import zipfile
 
 import yaml
 
 from kbforge.cli import main
-from kbforge.package import MANIFEST_FILENAME, build_package
+from kbforge.package import MANIFEST_FILENAME, README_FILENAME, build_package
 
 
 def _write_config(path, output_dir):
@@ -99,6 +100,58 @@ def test_package_command_creates_manifest(sample_kb, tmp_path, capsys):
     assert (output_dir / MANIFEST_FILENAME).is_file()
     assert "package manifest" in out
     assert "bm25, tfidf" in out
+
+
+def test_package_command_exports_archive(sample_kb, tmp_path, capsys):
+    config, output_dir = sample_kb
+    config_path = tmp_path / "client.yaml"
+    _write_config(config_path, output_dir)
+    archive_path = tmp_path / "delivery" / "client.zip"
+
+    exit_code = main(
+        ["package", "--config", str(config_path), "--archive", str(archive_path)]
+    )
+
+    out = capsys.readouterr().out
+    assert exit_code == 0
+    assert archive_path.is_file()
+    assert zipfile.is_zipfile(archive_path)
+    with zipfile.ZipFile(archive_path) as archive:
+        assert README_FILENAME in archive.namelist()
+    assert f"archive path     : {archive_path}" in out
+    assert "archive size     : " in out
+    assert "archive files    : " in out
+
+
+def test_package_command_archive_failure_exits_nonzero(sample_kb, tmp_path, capsys):
+    config, output_dir = sample_kb
+    config_path = tmp_path / "client.yaml"
+    _write_config(config_path, output_dir)
+    archive_path = tmp_path / "client.zip"
+    archive_path.write_bytes(b"existing archive")
+
+    exit_code = main(
+        ["package", "--config", str(config_path), "--archive", str(archive_path)]
+    )
+
+    captured = capsys.readouterr()
+    assert exit_code == 1
+    assert "export error" in captured.err
+    assert archive_path.read_bytes() == b"existing archive"
+
+    exit_code = main(
+        [
+            "package",
+            "--config",
+            str(config_path),
+            "--archive",
+            str(archive_path),
+            "--overwrite",
+        ]
+    )
+
+    assert exit_code == 0
+    assert zipfile.is_zipfile(archive_path)
 
 
 def test_cli_help_lists_phase5_commands(capsys):

@@ -1,0 +1,26 @@
+
+client_name: "React Knowledge Base"
+
+sources:
+  # Read documents from this local folder.
+  files_dir: "client_files_with_content/client_files"
+
+crawl:
+  max_depth: 1
+  max_pages: 50
+  delay_seconds: 1.0
+  timeout_seconds: 15
+  retries: 3
+  user_agent: "kbforge/0.1 (academic IR project; polite crawler)"
+
+chunking:
+  strategy: fixed
+  size: 300
+  overlap: 50
+
+index:
+  bm25: true
+  dense: false
+  embedding_model: "sentence-transformers/all-MiniLM-L6-v2"
+
+output_dir: "./output/react-knowledge-base"
