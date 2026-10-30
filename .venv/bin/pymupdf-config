@@ -1,6 +1,0 @@
-#!/home/hemish/Desktop/IR/.venv/bin/python3
-import sys
-from pymupdf.show_features import config
-if __name__ == '__main__':
-    sys.argv[0] = sys.argv[0].removesuffix('.exe')
-    sys.exit(config())
